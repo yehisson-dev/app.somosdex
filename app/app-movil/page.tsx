@@ -1,4 +1,4 @@
-import { auth } from "@/lib/session";
+import { auth } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";

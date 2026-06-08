@@ -1,4 +1,4 @@
-import { auth } from "@/lib/session";
+import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { Inter } from "next/font/google";
 import "./globals.css";
