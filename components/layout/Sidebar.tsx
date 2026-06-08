@@ -124,18 +124,27 @@ export function Sidebar() {
               <div className="pt-3 pb-1 px-2">
                 <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Administración</span>
               </div>
-              <NavItem
-                href="/clientes"
-                icon={<Building2 className="w-4 h-4" />}
-                label="Clientes"
-                active={pathname.startsWith("/clientes") && !pathname.startsWith("/clientes/prospectos")}
-              />
-              <NavItem
-                href="/clientes/prospectos"
-                icon={<TrendingUp className="w-4 h-4" />}
-                label="Prospectos CRM"
-                active={pathname.startsWith("/clientes/prospectos")}
-              />
+              {/* Sección Clientes con sub-items */}
+              <div>
+                <div className="flex items-center gap-2 px-2.5 py-1.5 text-sm text-gray-400">
+                  <Building2 className="w-4 h-4 shrink-0" />
+                  <span className="font-medium">Clientes</span>
+                </div>
+                <div className="ml-4 border-l border-gray-200 pl-3 space-y-0.5">
+                  <NavItem
+                    href="/clientes"
+                    icon={<Users className="w-3.5 h-3.5" />}
+                    label="Clientes activos"
+                    active={pathname === "/clientes" || (pathname.startsWith("/clientes/") && !pathname.startsWith("/clientes/prospectos"))}
+                  />
+                  <NavItem
+                    href="/clientes/prospectos"
+                    icon={<TrendingUp className="w-3.5 h-3.5" />}
+                    label="Prospectos CRM"
+                    active={pathname.startsWith("/clientes/prospectos")}
+                  />
+                </div>
+              </div>
               <NavItem
                 href="/usuarios"
                 icon={<Users className="w-4 h-4" />}
