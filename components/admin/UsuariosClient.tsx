@@ -140,7 +140,15 @@ export function UsuariosClient({
     setUserForm(EMPTY_USER_FORM);
     setDrawerOpen(false);
     setSaving(false);
-    toast.success("Usuario creado — podrá entrar con su cuenta de Google");
+
+    // Enviar correo de bienvenida
+    fetch("/api/users/invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: (data as any).email, name: (data as any).full_name }),
+    }).catch(() => {});
+
+    toast.success("Usuario creado — se le envió un correo de bienvenida");
   }
 
   // ── Eliminar usuario ──────────────────────────────────────────────────────
