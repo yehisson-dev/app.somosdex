@@ -15,6 +15,12 @@ const nextConfig: NextConfig = {
     ],
   },
   serverExternalPackages: ["pdf-parse", "postgres"],
+  // Permitir archivos grandes en uploads (videos hasta 500MB)
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "500mb",
+    },
+  },
 };
 
 export default nextConfig;

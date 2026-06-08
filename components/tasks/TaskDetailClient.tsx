@@ -93,21 +93,21 @@ export function TaskDetailClient({ task: initialTask, statuses, projectMembers, 
   async function uploadDeliverable(file: File) {
     setUploading(true);
     try {
-      const ext = file.name.split(".").pop();
-      const path = `tasks/${task.id}/${Date.now()}.${ext}`;
+      // 1. Subir archivo a /api/upload (almacenamiento local en el servidor)
+      const uploadRes = await fetch(
+        `/api/upload?filename=${encodeURIComponent(file.name)}&mimetype=${encodeURIComponent(file.type)}`,
+        { method: "POST", body: file }
+      );
+      if (!uploadRes.ok) {
+        const err = await uploadRes.json().catch(() => ({}));
+        throw new Error(err.error ?? "Error al subir el archivo");
+      }
+      const uploaded = await uploadRes.json();
+      const fileUrl = uploaded.url; // /api/files/<uuid>.<ext>
 
-      const { data: upload, error: uploadErr } = await supabase.storage
-        .from("deliverables")
-        .upload(path, file, { upsert: false });
-
-      if (uploadErr) throw uploadErr;
-
-      const { data: urlData } = supabase.storage.from("deliverables").getPublicUrl(path);
-      const fileUrl = urlData.publicUrl;
-
+      // 2. Guardar registro en task_deliverables
       const nextVersion = deliverables.length + 1;
       const isImage = file.type.startsWith("image");
-      const isVideo = file.type.startsWith("video");
 
       const { data: deliverable, error: dbErr } = await supabase
         .from("task_deliverables")
@@ -126,7 +126,7 @@ export function TaskDetailClient({ task: initialTask, statuses, projectMembers, 
 
       if (dbErr) throw dbErr;
 
-      // Auto-move to "En Revisión" status
+      // 3. Auto-mover a "En Revisión" si existe ese estado
       const revisionStatus = statuses.find((s) => s.name.toLowerCase().includes("revisión"));
       if (revisionStatus) {
         await supabase.from("tasks").update({ status_id: revisionStatus.id } as any).eq("id", task.id);
@@ -138,7 +138,7 @@ export function TaskDetailClient({ task: initialTask, statuses, projectMembers, 
         deliverables: [...(prev.deliverables ?? []), deliverable],
       }));
 
-      // Notify approver
+      // 4. Notificar al aprobador
       if (task.approver_id) {
         await createNotification(task.approver_id, "deliverable_uploaded", `Nuevo entregable en: ${task.title}`);
       }
@@ -146,8 +146,9 @@ export function TaskDetailClient({ task: initialTask, statuses, projectMembers, 
       await logActivity("deliverable_uploaded", { version: nextVersion, file: file.name });
       router.refresh();
       toast.success(`Entregable v${nextVersion} subido`);
-    } catch (err) {
-      toast.error("Error al subir el archivo");
+    } catch (err: any) {
+      console.error("[uploadDeliverable]", err);
+      toast.error(err.message ?? "Error al subir el archivo");
     } finally {
       setUploading(false);
     }
