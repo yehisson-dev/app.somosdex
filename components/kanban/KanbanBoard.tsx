@@ -56,33 +56,15 @@ export function KanbanBoard({
   // Abrir tarea — fetcha versión completa con relaciones
   async function openTask(taskId: string) {
     setLoadingTask(true);
-    const { data } = await supabase
-      .from("tasks")
-      .select(`
-        *,
-        client:clients(id, name, company, color),
-        project:projects(id, name, color, slug),
-        status:project_statuses(id, name, color, position),
-        assignee:users!tasks_assignee_id_fkey(id, full_name, avatar_url, job_title),
-        approver:users!tasks_approver_id_fkey(id, full_name, avatar_url, job_title),
-        deliverables:task_deliverables(
-          *,
-          uploader:users!task_deliverables_uploaded_by_fkey(id, full_name, avatar_url)
-        ),
-        comments:task_comments(
-          *,
-          user:users!task_comments_user_id_fkey(id, full_name, avatar_url)
-        ),
-        activity:task_activity(
-          *,
-          user:users!task_activity_user_id_fkey(id, full_name, avatar_url)
-        )
-      `)
-      .eq("id", taskId)
-      .single();
-
-    setLoadingTask(false);
-    if (data) setSelectedTask(data as Task);
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`);
+      const data = await res.json();
+      if (data && !data.error) setSelectedTask(data as Task);
+    } catch (e) {
+      console.error("[openTask]", e);
+    } finally {
+      setLoadingTask(false);
+    }
   }
 
   function closeTask() {
