@@ -64,6 +64,7 @@ export async function POST(req: NextRequest) {
     "messages", "notifications", "whiteboards", "whiteboard_members",
     "workspace_settings", "content_plans", "content_posts", "content_post_comments",
     "agents", "agent_runs", "brain_sources", "brain_embeddings",
+    "prospects",
   ]);
 
   if (!table || !ALLOWED_TABLES.has(table)) {

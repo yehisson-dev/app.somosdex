@@ -1,32 +1,51 @@
 import { unstable_noStore as noStore } from "next/cache";
-import { createAdminClient } from "@/lib/supabase/server";
+import sql from "@/lib/db";
 import { TopBar } from "@/components/layout/TopBar";
 import { ProjectCard } from "@/components/projects/ProjectCard";
-import type { Project } from "@/types/database";
 
 export const dynamic = "force-dynamic";
 
 async function fetchProjects() {
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const select = encodeURIComponent(
-    "*,manager:users!projects_manager_id_fkey(id,full_name,avatar_url),members:project_members(user:users(id,full_name,avatar_url,role)),statuses:project_statuses(id,name,color,position),task_count:tasks(count)"
-  );
-  const res = await fetch(`${url}/rest/v1/projects?select=${select}&order=name`, {
-    cache: "no-store",
-    headers: {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-    },
-  });
-  if (!res.ok) return null;
-  return res.json();
+  try {
+    const rows = await sql`
+      SELECT
+        p.*,
+        row_to_json(m.*) AS manager,
+        COALESCE(
+          json_agg(DISTINCT jsonb_build_object(
+            'user', jsonb_build_object(
+              'id', u.id, 'full_name', u.full_name,
+              'avatar_url', u.avatar_url, 'role', u.role
+            )
+          )) FILTER (WHERE u.id IS NOT NULL),
+          '[]'
+        ) AS members,
+        COALESCE(
+          json_agg(DISTINCT jsonb_build_object(
+            'id', ps.id, 'name', ps.name,
+            'color', ps.color, 'position', ps.position
+          )) FILTER (WHERE ps.id IS NOT NULL),
+          '[]'
+        ) AS statuses,
+        COUNT(DISTINCT t.id) AS task_count
+      FROM projects p
+      LEFT JOIN users m ON m.id = p.manager_id
+      LEFT JOIN project_members pm ON pm.project_id = p.id
+      LEFT JOIN users u ON u.id = pm.user_id
+      LEFT JOIN project_statuses ps ON ps.project_id = p.id
+      LEFT JOIN tasks t ON t.project_id = p.id
+      GROUP BY p.id, m.id
+      ORDER BY p.name
+    `;
+    return rows;
+  } catch (e) {
+    console.error("[proyectos] fetchProjects error:", e);
+    return [];
+  }
 }
 
 export default async function ProyectosPage() {
   noStore();
-
   const projects = await fetchProjects();
 
   return (
@@ -34,7 +53,7 @@ export default async function ProyectosPage() {
       <TopBar title="Proyectos" subtitle="Todos los proyectos de la agencia" />
       <div className="flex-1 overflow-y-auto p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-6xl">
-          {projects?.map((project) => (
+          {projects?.map((project: any) => (
             <ProjectCard key={project.id} project={project as any} />
           ))}
           {(!projects || projects.length === 0) && (

@@ -18,6 +18,7 @@ import {
   LayoutDashboard,
   Brain,
   Bot,
+  TrendingUp,
 } from "lucide-react";
 import { cn, getInitials } from "@/lib/utils";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -127,7 +128,13 @@ export function Sidebar() {
                 href="/clientes"
                 icon={<Building2 className="w-4 h-4" />}
                 label="Clientes"
-                active={pathname.startsWith("/clientes")}
+                active={pathname.startsWith("/clientes") && !pathname.startsWith("/clientes/prospectos")}
+              />
+              <NavItem
+                href="/clientes/prospectos"
+                icon={<TrendingUp className="w-4 h-4" />}
+                label="Prospectos CRM"
+                active={pathname.startsWith("/clientes/prospectos")}
               />
               <NavItem
                 href="/usuarios"
