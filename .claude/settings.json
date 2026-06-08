@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Write(c:\\Users\\RG\\Desktop\\Cubo Digital\\Proyecto ClicUp\\cowork-agency\\**)",
+      "Edit(c:\\Users\\RG\\Desktop\\Cubo Digital\\Proyecto ClicUp\\cowork-agency\\**)",
+      "Read(c:\\Users\\RG\\Desktop\\Cubo Digital\\Proyecto ClicUp\\cowork-agency\\**)",
+      "Glob",
+      "Grep",
+      "Bash(pnpm *)",
+      "Bash(mkdir *)",
+      "Bash(ls *)",
+      "Bash(node *)"
+    ]
+  }
+}
