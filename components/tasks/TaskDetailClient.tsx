@@ -74,7 +74,6 @@ export function TaskDetailClient({ task: initialTask, statuses, projectMembers, 
 
   async function submitComment() {
     if (!comment.trim()) return;
-    const mentionRegex = /@(\w+)/g;
     const mentions: string[] = [];
     const { data, error } = await supabase.from("task_comments").insert({
       task_id: task.id,
@@ -87,11 +86,19 @@ export function TaskDetailClient({ task: initialTask, statuses, projectMembers, 
       setTask((prev) => ({ ...prev, comments: [...(prev.comments ?? []), data] }));
       setComment("");
       router.refresh();
+
+      // Notificar al asignado si no soy yo el que comenta
+      if (task.assignee_id && task.assignee_id !== currentUserId) {
+        await createNotification(task.assignee_id, "task_comment", `Nuevo comentario en: ${task.title}`);
+      }
+      // Notificar al aprobador si no soy yo
+      if (task.approver_id && task.approver_id !== currentUserId && task.approver_id !== task.assignee_id) {
+        await createNotification(task.approver_id, "task_comment", `Nuevo comentario en: ${task.title}`);
+      }
     }
   }
 
-  async function uploadDeliverable(file: File) {
-    setUploading(true);
+  async function uploadDeliverable(file: File, versionOffset = 0) {
     try {
       // 1. Subir archivo a /api/upload (almacenamiento local en el servidor)
       const uploadRes = await fetch(
@@ -106,7 +113,7 @@ export function TaskDetailClient({ task: initialTask, statuses, projectMembers, 
       const fileUrl = uploaded.url; // /api/files/<uuid>.<ext>
 
       // 2. Guardar registro en task_deliverables
-      const nextVersion = deliverables.length + 1;
+      const nextVersion = deliverables.length + 1 + versionOffset;
       const isImage = file.type.startsWith("image");
 
       const { data: deliverable, error: dbErr } = await supabase
@@ -126,11 +133,13 @@ export function TaskDetailClient({ task: initialTask, statuses, projectMembers, 
 
       if (dbErr) throw dbErr;
 
-      // 3. Auto-mover a "En Revisión" si existe ese estado
-      const revisionStatus = statuses.find((s) => s.name.toLowerCase().includes("revisión"));
-      if (revisionStatus) {
-        await supabase.from("tasks").update({ status_id: revisionStatus.id } as any).eq("id", task.id);
-        setTask((prev) => ({ ...prev, status_id: revisionStatus.id, status: revisionStatus }));
+      // 3. Auto-mover a "En Revisión" si existe ese estado (solo en el primero)
+      if (versionOffset === 0) {
+        const revisionStatus = statuses.find((s) => s.name.toLowerCase().includes("revisión"));
+        if (revisionStatus) {
+          await supabase.from("tasks").update({ status_id: revisionStatus.id } as any).eq("id", task.id);
+          setTask((prev) => ({ ...prev, status_id: revisionStatus.id, status: revisionStatus }));
+        }
       }
 
       setTask((prev) => ({
@@ -138,20 +147,36 @@ export function TaskDetailClient({ task: initialTask, statuses, projectMembers, 
         deliverables: [...(prev.deliverables ?? []), deliverable],
       }));
 
-      // 4. Notificar al aprobador
-      if (task.approver_id) {
+      // 4. Notificar al aprobador (solo en el primero para no spamear)
+      if (task.approver_id && versionOffset === 0) {
         await createNotification(task.approver_id, "deliverable_uploaded", `Nuevo entregable en: ${task.title}`);
       }
 
       await logActivity("deliverable_uploaded", { version: nextVersion, file: file.name });
-      router.refresh();
-      toast.success(`Entregable v${nextVersion} subido`);
+      return true;
     } catch (err: any) {
       console.error("[uploadDeliverable]", err);
-      toast.error(err.message ?? "Error al subir el archivo");
-    } finally {
-      setUploading(false);
+      toast.error(`Error subiendo ${file.name}: ${err.message ?? "Error desconocido"}`);
+      return false;
     }
+  }
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    setUploading(true);
+    let successCount = 0;
+    for (let i = 0; i < files.length; i++) {
+      const ok = await uploadDeliverable(files[i], i);
+      if (ok) successCount++;
+    }
+    router.refresh();
+    if (successCount > 0) {
+      toast.success(successCount === 1 ? `Entregable subido` : `${successCount} entregables subidos`);
+    }
+    setUploading(false);
+    // Resetear input para permitir volver a seleccionar los mismos archivos
+    if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
   async function reviewDeliverable(deliverableId: string, status: "approved" | "rejected", note?: string) {
@@ -501,7 +526,8 @@ export function TaskDetailClient({ task: initialTask, statuses, projectMembers, 
                   type="file"
                   className="hidden"
                   accept="image/*,video/*,application/pdf"
-                  onChange={(e) => e.target.files?.[0] && uploadDeliverable(e.target.files[0])}
+                  multiple
+                  onChange={handleFileChange}
                 />
                 <Button
                   size="sm"

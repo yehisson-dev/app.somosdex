@@ -1,37 +1,32 @@
-import { unstable_noStore as noStore } from "next/cache";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
-import { createAdminClient } from "@/lib/supabase/server";
+import sql from "@/lib/db";
 import { TopBar } from "@/components/layout/TopBar";
 
 export const dynamic = "force-dynamic";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { formatDate, getInitials, getPriorityLabel, cn } from "@/lib/utils";
+import { formatDate, getPriorityLabel, cn } from "@/lib/utils";
 import { Calendar, AlertCircle, Clock, CheckCircle2 } from "lucide-react";
 import type { Task } from "@/types/database";
 
 export default async function MisTareasPage() {
   const session = await auth();
-  const supabase = createAdminClient();
+  const userId = session?.user?.id;
 
-  const { data: user } = await supabase
-    .from("users")
-    .select("id, role")
-    .eq("email", session?.user?.email!)
-    .single();
+  const tasksRaw = userId ? await sql`
+    SELECT
+      t.*,
+      json_build_object('id', c.id, 'name', c.name, 'color', c.color) AS client,
+      json_build_object('id', p.id, 'name', p.name, 'color', p.color) AS project,
+      json_build_object('id', s.id, 'name', s.name, 'color', s.color) AS status
+    FROM tasks t
+    LEFT JOIN clients c ON c.id = t.client_id
+    LEFT JOIN projects p ON p.id = t.project_id
+    LEFT JOIN project_statuses s ON s.id = t.status_id
+    WHERE t.assignee_id = ${userId}
+    ORDER BY t.due_date ASC NULLS LAST
+  ` : [];
 
-  const { data: tasksRaw } = await supabase
-    .from("tasks")
-    .select(`
-      *,
-      client:clients(id, name, color),
-      project:projects(id, name, color),
-      status:project_statuses(id, name, color)
-    `)
-    .eq("assignee_id", (user as any)?.id ?? "")
-    .order("due_date", { ascending: true });
-
-  const tasks = (tasksRaw ?? []) as Task[];
+  const tasks = tasksRaw as unknown as Task[];
   const today = new Date().toISOString().split("T")[0];
   const todayTasks = tasks.filter((t) => t.due_date === today);
   const upcomingTasks = tasks.filter((t) => t.due_date && t.due_date > today);
