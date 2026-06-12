@@ -27,7 +27,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const rows = await sql`
     SELECT i.*,
       CASE WHEN c.id IS NOT NULL THEN json_build_object(
-        'id',c.id,'name',c.name,'email',c.email,'company',c.company,'phone',c.phone,'address',c.address
+        'id',c.id,'name',c.name,'email',c.email,'company',c.company,'address',c.address
       ) END AS client,
       COALESCE((
         SELECT json_agg(json_build_object(
@@ -122,7 +122,6 @@ export async function GET(_req: NextRequest, { params }: Params) {
       <p class="name">${client.name ?? "—"}</p>
       ${client.company ? `<p>${client.company}</p>` : ""}
       ${client.email ? `<p>${client.email}</p>` : ""}
-      ${client.phone ? `<p>${client.phone}</p>` : ""}
       ${client.address ? `<p>${client.address}</p>` : ""}
     </div>
     <div class="meta-section" style="text-align:right">

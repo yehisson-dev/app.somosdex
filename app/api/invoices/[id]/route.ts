@@ -16,7 +16,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       i.*,
       CASE WHEN c.id IS NOT NULL THEN json_build_object(
         'id',c.id,'name',c.name,'color',c.color,'email',c.email,
-        'company',c.company,'phone',c.phone,'address',c.address
+        'company',c.company,'address',c.address
       ) END AS client,
       COALESCE((
         SELECT json_agg(json_build_object(
