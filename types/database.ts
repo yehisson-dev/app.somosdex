@@ -72,6 +72,8 @@ export interface Client {
   address: string | null;
   support_phone: string | null;
   objective: string | null;
+  brief_token: string | null;
+  brief_data: Record<string, string> | null;
   created_at: string;
   updated_at: string;
 }

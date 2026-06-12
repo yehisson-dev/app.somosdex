@@ -7,6 +7,7 @@ import {
   Building2, Mail, Phone, MapPin, Clock, Camera, Check,
   FileText, Palette, ListTodo, Target, LayoutDashboard,
   Pencil, X, Save, Plus, ArrowLeft, ChevronRight, ExternalLink,
+  Link as LinkIcon, CheckCircle2, ChevronDown,
 } from "lucide-react";
 import { BrainPanel } from "@/components/brain/BrainPanel";
 import { toast } from "sonner";
@@ -111,6 +112,115 @@ function TextPanel({
 }
 
 // ── Componente principal ───────────────────────────────────────────────────────
+// ── Brief Panel ───────────────────────────────────────────────────────────────
+const BRIEF_SECTIONS = [
+  { id: "empresa",      title: "Sobre tu empresa" },
+  { id: "conceptos",    title: "Conceptos de marca" },
+  { id: "competencia",  title: "Competencia" },
+  { id: "audiencia",    title: "Audiencia" },
+  { id: "comunicacion", title: "Comunicación" },
+  { id: "emociones",    title: "Emociones y sensaciones" },
+];
+
+function BriefPanel({ clientId, briefToken, briefData }: {
+  clientId: string; briefToken: string; briefData: Record<string, string> | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const hasData = briefData && Object.keys(briefData).length > 0;
+  const appUrl = typeof window !== "undefined" ? window.location.origin : "https://app.somosdex.com";
+  const link = `${appUrl}/brief/${briefToken}`;
+
+  function copy() {
+    navigator.clipboard.writeText(link);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  const filled = hasData ? Object.keys(briefData).length : 0;
+
+  return (
+    <div className="bg-violet-50/60 rounded-2xl flex flex-col overflow-hidden border border-violet-100">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 bg-white/70 border-b border-violet-100">
+        <div className="flex items-center gap-2">
+          <span className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-sm shrink-0 bg-indigo-500">
+            <FileText className="w-3.5 h-3.5" />
+          </span>
+          <span className="text-sm font-semibold text-gray-800">Brief de la marca</span>
+          {hasData && (
+            <span className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-600">
+              <CheckCircle2 className="w-3 h-3" /> Completado · {filled} respuestas
+            </span>
+          )}
+        </div>
+        {hasData && (
+          <button onClick={() => setOpen(v => !v)}
+            className="flex items-center gap-1 text-xs text-gray-400 hover:text-violet-600 transition-colors">
+            {open ? "Ocultar" : "Ver respuestas"}
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
+          </button>
+        )}
+      </div>
+
+      <div className="p-4 space-y-3">
+        {/* Link para compartir */}
+        <div>
+          <p className="text-xs text-gray-500 mb-1.5">Link para el cliente</p>
+          <div className="flex items-center gap-2">
+            <div className="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-xs text-gray-500 truncate font-mono">
+              {link}
+            </div>
+            <button onClick={copy}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 ${copied ? "bg-emerald-100 text-emerald-600" : "bg-violet-600 hover:bg-violet-700 text-white"}`}>
+              {copied ? <><Check className="w-3.5 h-3.5" />Copiado</> : <><LinkIcon className="w-3.5 h-3.5" />Copiar link</>}
+            </button>
+            <a href={link} target="_blank" rel="noopener noreferrer"
+              className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-400 hover:text-gray-600 transition-colors">
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          </div>
+        </div>
+
+        {!hasData && (
+          <p className="text-xs text-gray-400 italic">El cliente aún no ha completado el brief.</p>
+        )}
+
+        {/* Respuestas */}
+        {hasData && open && (
+          <div className="space-y-4 pt-1">
+            {BRIEF_SECTIONS.map((sec) => {
+              const entries = Object.entries(briefData).filter(([k]) => {
+                if (sec.id === "empresa")      return !k.startsWith("concepto") && !k.startsWith("competencia") && !k.startsWith("audiencia") && !k.startsWith("canal") && !k.startsWith("contenido") && !k.startsWith("mensaje") && !k.startsWith("tono") && !k.startsWith("emocion") && !k.startsWith("textura") && !k.startsWith("olor") && !k.startsWith("color_") && !k.startsWith("musica") && !k.startsWith("marca_admira") && !k.startsWith("marca_similar") && !k.startsWith("lider_mercado");
+                if (sec.id === "conceptos")    return k.startsWith("concepto");
+                if (sec.id === "competencia")  return k.startsWith("competencia") || k.startsWith("lider_mercado") || k.startsWith("marca_similar") || k.startsWith("marca_admira");
+                if (sec.id === "audiencia")    return k.startsWith("audiencia") || k.startsWith("quien_compra") || k.startsWith("insight") || k.startsWith("lifestyle") || k.startsWith("awareness");
+                if (sec.id === "comunicacion") return k.startsWith("canal") || k.startsWith("contenido") || k.startsWith("mensaje") || k.startsWith("tono") || k.startsWith("identidad");
+                if (sec.id === "emociones")    return k.startsWith("emocion") || k.startsWith("textura") || k.startsWith("olor") || k.startsWith("color_") || k.startsWith("musica") || k.startsWith("sensacion");
+                return false;
+              }).filter(([, v]) => v?.trim());
+              if (!entries.length) return null;
+              return (
+                <div key={sec.id}>
+                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">{sec.title}</h4>
+                  <div className="space-y-2">
+                    {entries.map(([k, v]) => (
+                      <div key={k} className="bg-white rounded-lg px-3 py-2 border border-gray-100">
+                        <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide mb-0.5">{k.replace(/_/g, " ")}</p>
+                        <p className="text-sm text-gray-700 whitespace-pre-wrap">{v}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function ClientProfileDashboard({ client: initialClient, projects, initialAssigned, whiteboards }: Props) {
   const supabase = createClient();
   const router   = useRouter();
@@ -395,13 +505,10 @@ export function ClientProfileDashboard({ client: initialClient, projects, initia
             </div>
 
             {/* Panel 2: Brief */}
-            <TextPanel
-              icon={<FileText className="w-3.5 h-3.5" />}
-              title="Brief de la marca"
-              value={client.brief ?? ""}
-              placeholder="Contexto del negocio, productos, historia y necesidades del cliente…"
-              onSave={makeSaver("brief")}
-              accentColor="#6366f1"
+            <BriefPanel
+              clientId={client.id}
+              briefToken={client.brief_token ?? ""}
+              briefData={client.brief_data ?? null}
             />
           </div>
 
