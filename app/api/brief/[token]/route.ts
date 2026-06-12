@@ -29,7 +29,7 @@ export async function POST(
   const rows = await sql`
     UPDATE clients
     SET
-      brief_data = ${JSON.stringify(body)}::jsonb,
+      brief_data = ${sql.json(body)},
       updated_at = now()
     WHERE brief_token = ${token}::uuid
     RETURNING id, name

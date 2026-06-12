@@ -122,11 +122,19 @@ const BRIEF_SECTIONS = [
   { id: "emociones",    title: "Emociones y sensaciones" },
 ];
 
-function BriefPanel({ clientId, briefToken, briefData }: {
-  clientId: string; briefToken: string; briefData: Record<string, string> | null;
+function BriefPanel({ clientId, briefToken, briefData: rawBriefData }: {
+  clientId: string; briefToken: string; briefData: Record<string, string> | string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  // Handles cases where brief_data arrives as a JSON string instead of parsed object
+  const briefData: Record<string, string> | null = (() => {
+    if (!rawBriefData) return null;
+    if (typeof rawBriefData === "string") {
+      try { return JSON.parse(rawBriefData); } catch { return null; }
+    }
+    return rawBriefData as Record<string, string>;
+  })();
   const hasData = briefData && Object.keys(briefData).length > 0;
   const appUrl = typeof window !== "undefined" ? window.location.origin : "https://app.somosdex.com";
   const link = `${appUrl}/brief/${briefToken}`;
