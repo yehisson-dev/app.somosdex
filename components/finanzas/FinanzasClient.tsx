@@ -244,34 +244,31 @@ export function FinanzasClient({
           {invoices.length > 0 && (() => {
             const usd = invoices.filter(i => i.currency === "USD");
             const dop = invoices.filter(i => i.currency === "DOP");
-            const sum = (arr: Invoice[]) => arr.reduce((s, i) => s + Number(i.total), 0);
+            const sum  = (arr: Invoice[]) => arr.reduce((s, i) => s + Number(i.total), 0);
             const paid = (arr: Invoice[]) => arr.filter(i => i.status === "paid").reduce((s, i) => s + Number(i.total), 0);
             const pend = (arr: Invoice[]) => arr.filter(i => ["draft","sent"].includes(i.status)).reduce((s, i) => s + Number(i.total), 0);
-            const blocks = [
-              ...(usd.length > 0 ? [
-                { label: "Facturado USD",  value: fmt(sum(usd),  "USD"), sub: null },
-                { label: "Pagado USD",     value: fmt(paid(usd), "USD"), color: "text-emerald-600" },
-                { label: "Pendiente USD",  value: fmt(pend(usd), "USD"), color: "text-amber-600" },
-              ] : []),
-              ...(dop.length > 0 ? [
-                { label: "Facturado DOP",  value: fmt(sum(dop),  "DOP"), sub: null },
-                { label: "Pagado DOP",     value: fmt(paid(dop), "DOP"), color: "text-emerald-600" },
-                { label: "Pendiente DOP",  value: fmt(pend(dop), "DOP"), color: "text-amber-600" },
-              ] : []),
+            const cards = [
+              { label: "Facturación",  usdVal: sum(usd),  dopVal: sum(dop),  textColor: "text-gray-900" },
+              { label: "Pagado",       usdVal: paid(usd), dopVal: paid(dop), textColor: "text-emerald-600" },
+              { label: "Pendiente",    usdVal: pend(usd), dopVal: pend(dop), textColor: "text-amber-600" },
             ];
             return (
               <div className="mt-4 flex gap-3 flex-wrap">
-                {usd.length > 0 && dop.length > 0 && (
-                  <div className="w-full flex items-center gap-2 text-xs text-gray-400 mb-1">
-                    <div className="flex-1 border-t border-dashed border-gray-200" />
-                    <span>Resumen por moneda</span>
-                    <div className="flex-1 border-t border-dashed border-gray-200" />
-                  </div>
-                )}
-                {blocks.map(({ label, value, color }) => (
-                  <div key={label} className="bg-white border border-gray-200 rounded-xl px-5 py-3 min-w-[140px]">
-                    <p className="text-xs text-gray-500 mb-1">{label}</p>
-                    <p className={`text-base font-bold ${color ?? "text-gray-900"}`}>{value}</p>
+                {cards.map(({ label, usdVal, dopVal, textColor }) => (
+                  <div key={label} className="bg-white border border-gray-200 rounded-xl px-5 py-3 min-w-[160px]">
+                    <p className="text-xs text-gray-500 mb-2 font-medium">{label}</p>
+                    {usd.length > 0 && (
+                      <div className="flex items-baseline justify-between gap-3 mb-1">
+                        <span className="text-[10px] text-gray-400 uppercase tracking-wide">USD</span>
+                        <span className={`text-sm font-bold ${textColor}`}>{fmt(usdVal, "USD")}</span>
+                      </div>
+                    )}
+                    {dop.length > 0 && (
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span className="text-[10px] text-gray-400 uppercase tracking-wide">DOP</span>
+                        <span className={`text-sm font-bold ${textColor}`}>{fmt(dopVal, "DOP")}</span>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
