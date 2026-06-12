@@ -32,12 +32,7 @@ export default async function ClientKanbanPage({ params }: PageProps) {
       WHERE t.project_id = ${projectId} AND t.client_id = ${clientId}
       ORDER BY t.position
     `,
-    sql`
-      SELECT u.id, u.full_name, u.avatar_url, u.job_title
-      FROM project_members pm
-      JOIN users u ON u.id = pm.user_id
-      WHERE pm.project_id = ${projectId}
-    `,
+    sql`SELECT id, full_name, avatar_url, job_title FROM users ORDER BY full_name`,
     sql`SELECT id FROM users WHERE email = ${session?.user?.email ?? ""} LIMIT 1`,
   ]);
 

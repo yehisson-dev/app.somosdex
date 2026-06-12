@@ -73,12 +73,7 @@ export default async function TaskDetailPage({ params }: PageProps) {
     SELECT * FROM project_statuses WHERE project_id = ${task.project_id} ORDER BY position
   `;
 
-  const membersRaw = await sql`
-    SELECT u.id, u.full_name, u.avatar_url, u.job_title
-    FROM project_members pm
-    JOIN users u ON u.id = pm.user_id
-    WHERE pm.project_id = ${task.project_id}
-  `;
+  const membersRaw = await sql`SELECT id, full_name, avatar_url, job_title FROM users ORDER BY full_name`;
 
   return (
     <TaskDetailClient
