@@ -4,6 +4,17 @@ import sql from "@/lib/db";
 
 type Params = { params: Promise<{ id: string }> };
 
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.somosdex.com";
+
+const COMPANY = {
+  logo:    `${BASE_URL}/logo-dex.jpg`,
+  name:    "Dex",
+  phone:   "(809) 769 3893",
+  address: "Santiago, República Dominicana 51800",
+  rnc:     "RNC 1-32-95841-1",
+  email:   "yehisson@somosdex.com",
+};
+
 function fmt(n: number | string, currency = "USD") {
   return new Intl.NumberFormat("es-DO", { style: "currency", currency }).format(Number(n));
 }
@@ -40,6 +51,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     WHERE i.id = ${id} LIMIT 1
   `;
   if (!rows[0]) return new NextResponse("Not found", { status: 404 });
+
   const inv = rows[0] as any;
   const client = inv.client ?? {};
   const items: any[] = inv.items ?? [];
@@ -47,11 +59,11 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const statusLabel = STATUS_LABELS[inv.status] ?? inv.status;
 
   const itemRows = items.map((it, i) => `
-    <tr class="${i % 2 === 0 ? "bg-white" : "bg-gray-50"}">
-      <td class="px-4 py-3 text-sm text-gray-700">${it.description}</td>
-      <td class="px-4 py-3 text-sm text-gray-600 text-center">${it.quantity}</td>
-      <td class="px-4 py-3 text-sm text-gray-600 text-right">${fmt(it.unit_price, inv.currency)}</td>
-      <td class="px-4 py-3 text-sm font-medium text-gray-900 text-right">${fmt(it.total, inv.currency)}</td>
+    <tr style="background:${i % 2 === 0 ? "#fff" : "#f9fafb"}">
+      <td class="td-desc">${it.description}</td>
+      <td class="td-num" style="text-align:center">${it.quantity}</td>
+      <td class="td-num">${fmt(it.unit_price, inv.currency)}</td>
+      <td class="td-num td-bold">${fmt(it.total, inv.currency)}</td>
     </tr>`).join("");
 
   const html = `<!DOCTYPE html>
@@ -60,55 +72,84 @@ export async function GET(_req: NextRequest, { params }: Params) {
 <meta charset="UTF-8">
 <title>Factura ${inv.invoice_number}</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827; background: #fff; }
-  .page { max-width: 800px; margin: 0 auto; padding: 48px 40px; }
-  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; }
-  .brand { display: flex; flex-direction: column; gap: 4px; }
-  .brand-name { font-size: 22px; font-weight: 800; color: #8b5cf6; letter-spacing: -0.5px; }
-  .brand-sub { font-size: 12px; color: #6b7280; }
-  .invoice-meta { text-align: right; }
-  .invoice-number { font-size: 18px; font-weight: 700; color: #111827; margin-bottom: 6px; }
-  .status-badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; color: #fff; background: ${statusColor}; }
-  .divider { border: none; border-top: 1px solid #e5e7eb; margin: 28px 0; }
-  .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px; }
-  .meta-section h4 { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: #9ca3af; margin-bottom: 8px; }
-  .meta-section p { font-size: 14px; color: #374151; line-height: 1.5; }
-  .meta-section .name { font-size: 15px; font-weight: 600; color: #111827; }
-  .dates { display: flex; gap: 32px; }
-  .date-item label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: #9ca3af; display: block; margin-bottom: 4px; }
-  .date-item span { font-size: 14px; color: #374151; }
-  table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
-  thead { background: #8b5cf6; }
-  thead th { padding: 10px 16px; text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #fff; }
-  thead th:not(:first-child) { text-align: right; }
-  thead th:nth-child(2) { text-align: center; }
-  tbody tr { border-bottom: 1px solid #f3f4f6; }
-  tbody td { padding: 12px 16px; }
-  .totals { margin-left: auto; width: 260px; }
-  .totals-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; color: #6b7280; }
-  .totals-row.tax { border-top: 1px solid #f3f4f6; }
-  .totals-row.total { border-top: 2px solid #8b5cf6; padding-top: 12px; margin-top: 4px; font-weight: 700; font-size: 16px; color: #111827; }
-  .totals-row.total span:last-child { color: #8b5cf6; }
-  .notes { background: #f9fafb; border-left: 3px solid #8b5cf6; border-radius: 4px; padding: 14px 16px; margin-top: 32px; }
-  .notes h4 { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: #9ca3af; margin-bottom: 6px; }
-  .notes p { font-size: 13px; color: #6b7280; line-height: 1.6; white-space: pre-wrap; }
-  .footer { margin-top: 48px; text-align: center; font-size: 11px; color: #9ca3af; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; color:#111827; background:#fff; font-size:13px; }
+  .page { max-width:820px; margin:0 auto; padding:48px 44px 36px; }
+
+  /* ── HEADER ── */
+  .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:32px; }
+  .logo { height:64px; width:auto; object-fit:contain; }
+  .company-info { margin-top:10px; line-height:1.7; color:#4b5563; font-size:12px; }
+  .company-info strong { display:block; color:#1e2d47; font-size:14px; font-weight:700; margin-bottom:2px; }
+  .invoice-meta { text-align:right; }
+  .invoice-title { font-size:26px; font-weight:800; color:#1e2d47; letter-spacing:-0.5px; }
+  .invoice-number { font-size:14px; color:#6b7280; margin:4px 0 10px; }
+  .status-badge { display:inline-block; padding:4px 12px; border-radius:999px; font-size:11px; font-weight:700; color:#fff; background:${statusColor}; letter-spacing:.04em; text-transform:uppercase; }
+
+  /* ── DIVIDER ── */
+  .divider { border:none; border-top:2px solid #f3c842; margin:24px 0; }
+
+  /* ── BILL-TO + DATES ── */
+  .meta-grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-bottom:28px; }
+  .meta-section h4 { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:#9ca3af; margin-bottom:8px; }
+  .meta-section .client-name { font-size:15px; font-weight:700; color:#111827; }
+  .meta-section p { font-size:13px; color:#4b5563; line-height:1.6; }
+  .dates { display:flex; gap:28px; justify-content:flex-end; }
+  .date-item label { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:#9ca3af; display:block; margin-bottom:3px; }
+  .date-item span { font-size:13px; color:#374151; }
+
+  /* ── TABLE ── */
+  table { width:100%; border-collapse:collapse; margin-bottom:20px; border-radius:8px; overflow:hidden; }
+  thead tr { background:#1e2d47; }
+  thead th { padding:11px 16px; text-align:right; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:#fff; }
+  thead th:first-child { text-align:left; }
+  thead th:nth-child(2) { text-align:center; }
+  tbody tr { border-bottom:1px solid #f3f4f6; }
+  .td-desc { padding:11px 16px; font-size:13px; color:#374151; }
+  .td-num  { padding:11px 16px; font-size:13px; color:#4b5563; text-align:right; }
+  .td-bold { font-weight:600; color:#111827; }
+
+  /* ── TOTALS ── */
+  .totals { margin-left:auto; width:280px; margin-bottom:32px; }
+  .t-row { display:flex; justify-content:space-between; padding:5px 0; font-size:13px; color:#6b7280; }
+  .t-row.t-tax { border-top:1px solid #f3f4f6; }
+  .t-row.t-total { border-top:2px solid #1e2d47; padding-top:10px; margin-top:4px; font-weight:700; font-size:16px; color:#111827; }
+  .t-row.t-total span:last-child { color:#1e2d47; }
+
+  /* ── NOTES ── */
+  .notes { background:#f9fafb; border-left:3px solid #f3c842; border-radius:4px; padding:14px 16px; margin-bottom:32px; }
+  .notes h4 { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:#9ca3af; margin-bottom:6px; }
+  .notes p { font-size:13px; color:#6b7280; line-height:1.6; white-space:pre-wrap; }
+
+  /* ── FOOTER ── */
+  .footer { border-top:1px solid #e5e7eb; padding-top:16px; display:flex; justify-content:space-between; align-items:center; }
+  .footer-legal { font-size:11px; color:#9ca3af; font-style:italic; }
+  .footer-date  { font-size:11px; color:#9ca3af; }
+
   @media print {
-    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .no-print { display: none !important; }
-    .page { padding: 24px; }
+    body { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .page { padding:28px 32px 20px; }
+    @page { margin:0; }
   }
 </style>
 </head>
 <body>
 <div class="page">
+
+  <!-- HEADER -->
   <div class="header">
-    <div class="brand">
-      <div class="brand-name">Cubo Digital</div>
-      <div class="brand-sub">app.somosdex.com</div>
+    <div>
+      <img src="${COMPANY.logo}" alt="Dex" class="logo" />
+      <div class="company-info">
+        <strong>${COMPANY.name}</strong>
+        ${COMPANY.phone}<br>
+        ${COMPANY.address}<br>
+        ${COMPANY.rnc}<br>
+        ${COMPANY.email}
+      </div>
     </div>
     <div class="invoice-meta">
+      <div class="invoice-title">FACTURA</div>
       <div class="invoice-number">${inv.invoice_number}</div>
       <div class="status-badge">${statusLabel}</div>
     </div>
@@ -116,17 +157,18 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
   <hr class="divider">
 
+  <!-- DATOS CLIENTE + FECHAS -->
   <div class="meta-grid">
     <div class="meta-section">
       <h4>Facturar a</h4>
-      <p class="name">${client.name ?? "—"}</p>
+      <p class="client-name">${client.name ?? "—"}</p>
       ${client.company ? `<p>${client.company}</p>` : ""}
-      ${client.email ? `<p>${client.email}</p>` : ""}
+      ${client.email   ? `<p>${client.email}</p>`   : ""}
       ${client.address ? `<p>${client.address}</p>` : ""}
     </div>
-    <div class="meta-section" style="text-align:right">
-      <h4>Fechas</h4>
-      <div class="dates" style="justify-content:flex-end">
+    <div class="meta-section">
+      <h4 style="text-align:right">Fechas</h4>
+      <div class="dates">
         <div class="date-item">
           <label>Emisión</label>
           <span>${fmtDate(inv.issue_date)}</span>
@@ -136,27 +178,37 @@ export async function GET(_req: NextRequest, { params }: Params) {
     </div>
   </div>
 
+  <!-- TABLA DE SERVICIOS -->
   <table>
     <thead>
       <tr>
         <th>Descripción</th>
         <th style="text-align:center">Cant.</th>
-        <th style="text-align:right">Precio unit.</th>
-        <th style="text-align:right">Total</th>
+        <th>Precio unit.</th>
+        <th>Total</th>
       </tr>
     </thead>
-    <tbody>${itemRows || '<tr><td colspan="4" style="text-align:center;padding:20px;color:#9ca3af;font-size:13px">Sin ítems</td></tr>'}</tbody>
+    <tbody>
+      ${itemRows || `<tr><td colspan="4" style="text-align:center;padding:20px;color:#9ca3af">Sin ítems</td></tr>`}
+    </tbody>
   </table>
 
+  <!-- TOTALES -->
   <div class="totals">
-    <div class="totals-row"><span>Subtotal</span><span>${fmt(inv.subtotal, inv.currency)}</span></div>
-    ${Number(inv.tax_rate) > 0 ? `<div class="totals-row tax"><span>ITBIS (${inv.tax_rate}%)</span><span>${fmt(inv.tax_amount, inv.currency)}</span></div>` : ""}
-    <div class="totals-row total"><span>Total</span><span>${fmt(inv.total, inv.currency)}</span></div>
+    <div class="t-row"><span>Subtotal</span><span>${fmt(inv.subtotal, inv.currency)}</span></div>
+    ${Number(inv.tax_rate) > 0 ? `<div class="t-row t-tax"><span>ITBIS (${inv.tax_rate}%)</span><span>${fmt(inv.tax_amount, inv.currency)}</span></div>` : ""}
+    <div class="t-row t-total"><span>Total</span><span>${fmt(inv.total, inv.currency)}</span></div>
   </div>
 
+  <!-- NOTAS -->
   ${inv.notes ? `<div class="notes"><h4>Notas</h4><p>${inv.notes}</p></div>` : ""}
 
-  <div class="footer">Generado por Cubo Digital · ${new Date().toLocaleDateString("es-DO")}</div>
+  <!-- PIE DE PÁGINA -->
+  <div class="footer">
+    <div class="footer-legal">Tipo de factura digital sin valor fiscal.</div>
+    <div class="footer-date">Emitida el ${new Date().toLocaleDateString("es-DO", { day:"numeric", month:"long", year:"numeric" })}</div>
+  </div>
+
 </div>
 <script>window.onload = () => window.print();</script>
 </body>
