@@ -38,8 +38,8 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function FinanzasClient({
-  initialInvoices, clients, initialServices,
-}: { initialInvoices: Invoice[]; clients: Client[]; initialServices: Service[] }) {
+  initialInvoices, clients, initialServices, exchangeRate: initialRate,
+}: { initialInvoices: Invoice[]; clients: Client[]; initialServices: Service[]; exchangeRate: number }) {
   const router = useRouter();
   const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices);
   const [services, setServices] = useState<Service[]>(initialServices);
@@ -48,6 +48,9 @@ export function FinanzasClient({
   const [showServiceForm, setShowServiceForm] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
   const [search, setSearch] = useState("");
+  const [exchangeRate, setExchangeRate] = useState(initialRate);
+  const [editingRate, setEditingRate] = useState(false);
+  const [rateInput, setRateInput] = useState(String(initialRate));
 
   const filtered = invoices.filter((inv) => {
     const q = search.toLowerCase();
@@ -80,6 +83,27 @@ export function FinanzasClient({
     window.open(`/api/invoices/${id}/pdf`, "_blank");
   }
 
+  async function saveRate() {
+    const n = parseFloat(rateInput);
+    if (!n || n <= 0) { toast.error("Tasa inválida"); return; }
+    const res = await fetch("/api/finanzas/exchange-rate", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rate: n }),
+    });
+    if (res.ok) {
+      setExchangeRate(n);
+      setEditingRate(false);
+      toast.success("Tasa actualizada");
+    }
+  }
+
+  function convertAmount(amount: number, currency: string) {
+    if (currency === "USD") return { label: "DOP", value: amount * exchangeRate };
+    if (currency === "DOP") return { label: "USD", value: amount / exchangeRate };
+    return null;
+  }
+
   return (
     <div className="flex-1 overflow-y-auto p-6">
       {/* Tabs */}
@@ -108,6 +132,33 @@ export function FinanzasClient({
           <Plus className="w-4 h-4" />
           {view === "invoices" ? "Nueva factura" : "Nuevo servicio"}
         </button>
+      </div>
+
+      {/* ── TIPO DE CAMBIO ── */}
+      <div className="flex items-center gap-2 mb-5 text-sm">
+        <span className="text-gray-400">Tipo de cambio USD →</span>
+        {editingRate ? (
+          <>
+            <input
+              type="number" step="0.01" min="1" value={rateInput}
+              onChange={(e) => setRateInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") saveRate(); if (e.key === "Escape") setEditingRate(false); }}
+              autoFocus
+              className="w-24 border border-violet-400 rounded-md px-2 py-1 text-sm font-semibold text-gray-800 outline-none"
+            />
+            <span className="text-gray-400 text-xs">DOP</span>
+            <button onClick={saveRate} className="text-xs bg-violet-600 text-white px-3 py-1 rounded-md hover:bg-violet-700 transition-colors">Guardar</button>
+            <button onClick={() => setEditingRate(false)} className="text-xs text-gray-400 hover:text-gray-600">Cancelar</button>
+          </>
+        ) : (
+          <>
+            <span className="font-semibold text-gray-800">RD$ {exchangeRate.toFixed(2)}</span>
+            <button onClick={() => { setRateInput(String(exchangeRate)); setEditingRate(true); }}
+              className="flex items-center gap-1 text-xs text-gray-400 hover:text-violet-600 transition-colors">
+              <Pencil className="w-3 h-3" /> Cambiar
+            </button>
+          </>
+        )}
       </div>
 
       {/* ── VISTA FACTURAS ── */}
@@ -156,7 +207,10 @@ export function FinanzasClient({
                           ) : <span className="text-sm text-gray-400">—</span>}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-500">{fmtDate(inv.issue_date)}</td>
-                        <td className="px-4 py-3 text-sm font-semibold text-gray-900 text-right">{fmt(inv.total, inv.currency)}</td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="text-sm font-semibold text-gray-900">{fmt(inv.total, inv.currency)}</div>
+                          {(() => { const c = convertAmount(inv.total, inv.currency); return c ? <div className="text-[11px] text-gray-400">{fmt(c.value, c.label)}</div> : null; })()}
+                        </td>
                         <td className="px-4 py-3 text-center">
                           <StatusDropdown status={inv.status} onChange={(s) => updateStatus(inv.id, s)} />
                         </td>
@@ -230,6 +284,7 @@ export function FinanzasClient({
         <InvoiceForm
           clients={clients}
           services={services}
+          exchangeRate={exchangeRate}
           onClose={() => setShowForm(false)}
           onCreated={(inv) => { setInvoices((prev) => [inv, ...prev]); setShowForm(false); toast.success(`Factura ${inv.invoice_number} creada`); }}
         />
@@ -249,6 +304,7 @@ export function FinanzasClient({
           invoice={editingInvoice}
           clients={clients}
           services={services}
+          exchangeRate={exchangeRate}
           onClose={() => setEditingInvoice(null)}
           onSaved={(updated) => {
             setInvoices((prev) => prev.map((i) => i.id === updated.id ? { ...i, ...updated } : i));
@@ -290,8 +346,8 @@ function StatusDropdown({ status, onChange }: { status: string; onChange: (s: st
 }
 
 // ─── InvoiceForm ──────────────────────────────────────────────────────────────
-function InvoiceForm({ clients, services, onClose, onCreated }: {
-  clients: Client[]; services: Service[];
+function InvoiceForm({ clients, services, exchangeRate, onClose, onCreated }: {
+  clients: Client[]; services: Service[]; exchangeRate: number;
   onClose: () => void; onCreated: (inv: Invoice) => void;
 }) {
   const [clientId, setClientId] = useState("");
@@ -473,6 +529,8 @@ function InvoiceForm({ clients, services, onClose, onCreated }: {
                 <div className="flex justify-between text-xs text-gray-500"><span>Subtotal</span><span>{fmt(subtotal, currency)}</span></div>
                 {taxRate > 0 && <div className="flex justify-between text-xs text-gray-500"><span>ITBIS ({taxRate}%)</span><span>{fmt(taxAmt, currency)}</span></div>}
                 <div className="flex justify-between text-sm font-bold text-gray-900 pt-1 border-t border-gray-200"><span>Total</span><span className="text-violet-600">{fmt(total, currency)}</span></div>
+                {currency === "USD" && <div className="flex justify-between text-xs text-gray-400"><span>≈ DOP</span><span>{fmt(total * exchangeRate, "DOP")}</span></div>}
+                {currency === "DOP" && <div className="flex justify-between text-xs text-gray-400"><span>≈ USD</span><span>{fmt(total / exchangeRate, "USD")}</span></div>}
               </div>
             </div>
           </div>
@@ -500,8 +558,8 @@ function InvoiceForm({ clients, services, onClose, onCreated }: {
 }
 
 // ─── EditInvoiceForm ──────────────────────────────────────────────────────────
-function EditInvoiceForm({ invoice, clients, services, onClose, onSaved }: {
-  invoice: Invoice; clients: Client[]; services: Service[];
+function EditInvoiceForm({ invoice, clients, services, exchangeRate, onClose, onSaved }: {
+  invoice: Invoice; clients: Client[]; services: Service[]; exchangeRate: number;
   onClose: () => void; onSaved: (inv: Invoice) => void;
 }) {
   const [clientId, setClientId]   = useState(invoice.client?.id ?? "");
@@ -711,6 +769,8 @@ function EditInvoiceForm({ invoice, clients, services, onClose, onSaved }: {
                     <div className="flex justify-between text-xs text-gray-500"><span>Subtotal</span><span>{fmt(subtotal, currency)}</span></div>
                     {taxRate > 0 && <div className="flex justify-between text-xs text-gray-500"><span>ITBIS ({taxRate}%)</span><span>{fmt(taxAmt, currency)}</span></div>}
                     <div className="flex justify-between text-sm font-bold text-gray-900 pt-1 border-t border-gray-200"><span>Total</span><span className="text-violet-600">{fmt(total, currency)}</span></div>
+                    {currency === "USD" && <div className="flex justify-between text-xs text-gray-400"><span>≈ DOP</span><span>{fmt(total * exchangeRate, "DOP")}</span></div>}
+                    {currency === "DOP" && <div className="flex justify-between text-xs text-gray-400"><span>≈ USD</span><span>{fmt(total / exchangeRate, "USD")}</span></div>}
                   </div>
                 </div>
               </div>
