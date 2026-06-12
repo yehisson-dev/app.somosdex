@@ -19,6 +19,7 @@ import {
   Brain,
   Bot,
   TrendingUp,
+  DollarSign,
 } from "lucide-react";
 import { cn, getInitials } from "@/lib/utils";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -145,6 +146,12 @@ export function Sidebar() {
                   />
                 </div>
               </div>
+              <NavItem
+                href="/finanzas"
+                icon={<DollarSign className="w-4 h-4" />}
+                label="Finanzas"
+                active={pathname.startsWith("/finanzas")}
+              />
               <NavItem
                 href="/usuarios"
                 icon={<Users className="w-4 h-4" />}
