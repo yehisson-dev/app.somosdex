@@ -23,8 +23,10 @@ interface Invoice {
 function fmt(n: number, currency = "USD") {
   return new Intl.NumberFormat("es-DO", { style: "currency", currency }).format(n);
 }
-function fmtDate(d: string) {
-  return new Date(d + "T00:00:00").toLocaleDateString("es-DO", { day: "2-digit", month: "short", year: "numeric" });
+function fmtDate(d: string | Date | null | undefined) {
+  if (!d) return "—";
+  const s = typeof d === "string" ? d : d.toISOString();
+  return new Date(s.slice(0, 10) + "T00:00:00").toLocaleDateString("es-DO", { day: "2-digit", month: "short", year: "numeric" });
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
@@ -503,8 +505,8 @@ function EditInvoiceForm({ invoice, clients, services, onClose, onSaved }: {
   onClose: () => void; onSaved: (inv: Invoice) => void;
 }) {
   const [clientId, setClientId]   = useState(invoice.client?.id ?? "");
-  const [issueDate, setIssueDate] = useState(invoice.issue_date?.slice(0, 10) ?? "");
-  const [dueDate, setDueDate]     = useState(invoice.due_date?.slice(0, 10) ?? "");
+  const [issueDate, setIssueDate] = useState(typeof invoice.issue_date === "string" ? invoice.issue_date.slice(0, 10) : "");
+  const [dueDate, setDueDate]     = useState(typeof invoice.due_date   === "string" ? invoice.due_date.slice(0, 10)   : "");
   const [notes, setNotes]         = useState(invoice.notes ?? "");
   const [taxRate, setTaxRate]     = useState(Number(invoice.tax_rate ?? 0));
   const [currency, setCurrency]   = useState(invoice.currency ?? "USD");

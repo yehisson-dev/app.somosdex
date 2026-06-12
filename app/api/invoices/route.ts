@@ -9,7 +9,10 @@ export async function GET() {
 
   const rows = await sql`
     SELECT
-      i.*,
+      i.id, i.invoice_number, i.status, i.currency, i.notes,
+      i.tax_rate, i.tax_amount, i.subtotal, i.total, i.client_id,
+      to_char(i.issue_date, 'YYYY-MM-DD') AS issue_date,
+      to_char(i.due_date,   'YYYY-MM-DD') AS due_date,
       CASE WHEN c.id IS NOT NULL THEN json_build_object('id',c.id,'name',c.name,'color',c.color,'email',c.email,'company',c.company) END AS client
     FROM invoices i
     LEFT JOIN clients c ON c.id = i.client_id
