@@ -29,7 +29,7 @@ export default async function ClientKanbanPage({ params }: PageProps) {
           FROM task_deliverables td WHERE td.task_id = t.id
         ), '[]') AS deliverables
       FROM tasks t
-      WHERE t.project_id = ${projectId} AND t.client_id = ${clientId}
+      WHERE t.project_id = ${projectId} AND t.client_id = ${clientId} AND t.parent_task_id IS NULL
       ORDER BY t.position
     `,
     sql`SELECT id, full_name, avatar_url, job_title FROM users ORDER BY full_name`,

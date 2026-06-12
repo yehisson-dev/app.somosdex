@@ -22,7 +22,7 @@ export default async function MisTareasPage() {
     LEFT JOIN clients c ON c.id = t.client_id
     LEFT JOIN projects p ON p.id = t.project_id
     LEFT JOIN project_statuses s ON s.id = t.status_id
-    WHERE t.assignee_id = ${userId}
+    WHERE t.assignee_id = ${userId} AND t.parent_task_id IS NULL
     ORDER BY t.due_date ASC NULLS LAST
   ` : [];
 
