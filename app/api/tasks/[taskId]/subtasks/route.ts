@@ -10,7 +10,7 @@ export async function POST(
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { taskId } = await params;
-  const { title } = await req.json();
+  const { title, assignee_id, due_date, priority } = await req.json();
   if (!title?.trim()) return NextResponse.json({ error: "title requerido" }, { status: 400 });
 
   // Heredar project_id, client_id y status_id del padre
@@ -21,20 +21,32 @@ export async function POST(
   const parent = parentRows[0] as any;
 
   const rows = await sql`
-    INSERT INTO tasks (title, project_id, client_id, status_id, parent_task_id, priority, created_by)
+    INSERT INTO tasks (title, project_id, client_id, status_id, parent_task_id, priority, assignee_id, due_date, created_by)
     VALUES (
       ${title.trim()},
       ${parent.project_id},
       ${parent.client_id ?? null},
       ${parent.status_id ?? null},
       ${taskId},
-      'medium',
+      ${priority ?? 'none'},
+      ${assignee_id ?? null},
+      ${due_date ?? null},
       ${session.user.id}
     )
-    RETURNING id, title, priority, status_id, assignee_id, due_date, created_at, parent_task_id
+    RETURNING id, title, priority, status_id, assignee_id, to_char(due_date,'YYYY-MM-DD') AS due_date, created_at, parent_task_id
   `;
 
-  return NextResponse.json(rows[0]);
+  const task = rows[0] as any;
+
+  // Adjuntar assignee si se asignó
+  if (task.assignee_id) {
+    const uRows = await sql`SELECT id, full_name, avatar_url FROM users WHERE id = ${task.assignee_id} LIMIT 1`;
+    task.assignee = uRows[0] ?? null;
+  } else {
+    task.assignee = null;
+  }
+
+  return NextResponse.json(task);
 }
 
 export async function PATCH(
@@ -45,18 +57,18 @@ export async function PATCH(
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { taskId } = await params;
-  const { subtaskId, title, status_id, assignee_id, due_date } = await req.json();
+  const { subtaskId, title, status_id, assignee_id, due_date, priority } = await req.json();
   if (!subtaskId) return NextResponse.json({ error: "subtaskId requerido" }, { status: 400 });
 
-  const updates: string[] = [];
-  if (title !== undefined) updates.push(`title = '${title.replace(/'/g, "''")}'`);
-  if (status_id !== undefined) updates.push(status_id ? `status_id = '${status_id}'` : `status_id = NULL`);
-  if (assignee_id !== undefined) updates.push(assignee_id ? `assignee_id = '${assignee_id}'` : `assignee_id = NULL`);
-  if (due_date !== undefined) updates.push(due_date ? `due_date = '${due_date}'` : `due_date = NULL`);
-
-  if (updates.length === 0) return NextResponse.json({ ok: true });
-
-  await sql.unsafe(`UPDATE tasks SET ${updates.join(", ")} WHERE id = '${subtaskId}' AND parent_task_id = '${taskId}'`);
+  await sql`
+    UPDATE tasks SET
+      title       = COALESCE(${title ?? null}, title),
+      status_id   = CASE WHEN ${status_id !== undefined} THEN ${status_id ?? null} ELSE status_id END,
+      assignee_id = CASE WHEN ${assignee_id !== undefined} THEN ${assignee_id ?? null} ELSE assignee_id END,
+      due_date    = CASE WHEN ${due_date !== undefined} THEN ${due_date ?? null} ELSE due_date END,
+      priority    = CASE WHEN ${priority !== undefined} THEN ${priority ?? 'medium'} ELSE priority END
+    WHERE id = ${subtaskId} AND parent_task_id = ${taskId}
+  `;
   return NextResponse.json({ ok: true });
 }
 
