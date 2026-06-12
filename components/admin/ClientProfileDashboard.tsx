@@ -7,7 +7,7 @@ import {
   Building2, Mail, Phone, MapPin, Clock, Camera, Check,
   FileText, Palette, ListTodo, Target, LayoutDashboard,
   Pencil, X, Save, Plus, ArrowLeft, ChevronRight, ExternalLink,
-  Link as LinkIcon, CheckCircle2, ChevronDown,
+  Link as LinkIcon, CheckCircle2, ChevronDown, Download,
 } from "lucide-react";
 import { BrainPanel } from "@/components/brain/BrainPanel";
 import { toast } from "sonner";
@@ -155,11 +155,17 @@ function BriefPanel({ clientId, briefToken, briefData }: {
           )}
         </div>
         {hasData && (
-          <button onClick={() => setOpen(v => !v)}
-            className="flex items-center gap-1 text-xs text-gray-400 hover:text-violet-600 transition-colors">
-            {open ? "Ocultar" : "Ver respuestas"}
-            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
-          </button>
+          <div className="flex items-center gap-2">
+            <a href={`/api/clients/${clientId}/brief-pdf`} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1 text-xs text-gray-400 hover:text-violet-600 transition-colors">
+              <Download className="w-3.5 h-3.5" /> PDF
+            </a>
+            <button onClick={() => setOpen(v => !v)}
+              className="flex items-center gap-1 text-xs text-gray-400 hover:text-violet-600 transition-colors">
+              {open ? "Ocultar" : "Ver respuestas"}
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
+            </button>
+          </div>
         )}
       </div>
 
