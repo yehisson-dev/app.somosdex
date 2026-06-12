@@ -53,7 +53,20 @@ export async function GET(
         FROM task_activity ta
         LEFT JOIN users tau ON tau.id = ta.user_id
         WHERE ta.task_id = t.id
-      ), '[]') AS activity
+      ), '[]') AS activity,
+      COALESCE((
+        SELECT json_agg(json_build_object(
+          'id',st.id,'title',st.title,'priority',st.priority,'status_id',st.status_id,
+          'assignee_id',st.assignee_id,'due_date',to_char(st.due_date,'YYYY-MM-DD'),
+          'created_at',st.created_at,'parent_task_id',st.parent_task_id,
+          'status', CASE WHEN sps.id IS NOT NULL THEN json_build_object('id',sps.id,'name',sps.name,'color',sps.color) END,
+          'assignee', CASE WHEN sau.id IS NOT NULL THEN json_build_object('id',sau.id,'full_name',sau.full_name,'avatar_url',sau.avatar_url) END
+        ) ORDER BY st.created_at ASC)
+        FROM tasks st
+        LEFT JOIN project_statuses sps ON sps.id = st.status_id
+        LEFT JOIN users sau ON sau.id = st.assignee_id
+        WHERE st.parent_task_id = t.id
+      ), '[]') AS subtasks
     FROM tasks t
     LEFT JOIN clients c ON c.id = t.client_id
     LEFT JOIN projects p ON p.id = t.project_id

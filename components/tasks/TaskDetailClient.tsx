@@ -13,6 +13,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { createClient } from "@/lib/supabase/client";
+import { SubtaskList } from "@/components/tasks/SubtaskList";
 import type { Task, ProjectStatus, User as UserType, TaskDeliverable, TaskComment, TaskActivity, NotificationType } from "@/types/database";
 
 interface TaskDetailClientProps {
@@ -513,6 +514,15 @@ export function TaskDetailClient({ task: initialTask, statuses, projectMembers, 
               className="w-full bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm text-gray-800 placeholder:text-gray-400 resize-y focus:outline-none focus:border-violet-300 transition-colors min-h-[120px]"
             />
           </section>
+
+          {/* Subtareas */}
+          <SubtaskList
+            taskId={task.id}
+            initialSubtasks={(task as any).subtasks ?? []}
+            statuses={statuses}
+            projectMembers={projectMembers}
+            currentUserId={currentUserId}
+          />
 
           {/* Deliverables */}
           <section>
