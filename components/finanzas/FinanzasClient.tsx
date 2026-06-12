@@ -514,19 +514,32 @@ function EditInvoiceForm({ invoice, clients, services, onClose, onSaved }: {
   const [items, setItems]         = useState<InvoiceItem[]>([]);
   const [serviceSearch, setServiceSearch] = useState<number | null>(null);
 
-  // Cargar ítems actuales
+  // Cargar datos completos (ítems + campos que puede que no vengan en la lista)
   useEffect(() => {
     fetch(`/api/invoices/${invoice.id}`)
-      .then((r) => r.json())
+      .then((r) => { if (!r.ok) throw new Error("fetch failed"); return r.json(); })
       .then((data) => {
         const loaded = (data.items ?? []).map((it: any) => ({
-          description: it.description, quantity: Number(it.quantity),
-          unit_price: Number(it.unit_price), total: Number(it.total), service_id: it.service_id ?? null,
+          description: String(it.description ?? ""),
+          quantity:    Number(it.quantity  ?? 1),
+          unit_price:  Number(it.unit_price ?? 0),
+          total:       Number(it.total      ?? 0),
+          service_id:  it.service_id ?? null,
         }));
         setItems(loaded.length ? loaded : [{ description: "", quantity: 1, unit_price: 0, total: 0, service_id: null }]);
+        if (data.issue_date) setIssueDate(String(data.issue_date).slice(0, 10));
+        if (data.due_date)   setDueDate(String(data.due_date).slice(0, 10));
+        if (data.tax_rate != null) setTaxRate(Number(data.tax_rate));
+        if (data.currency)   setCurrency(data.currency);
+        if (data.status)     setStatus(data.status);
+        if (data.notes)      setNotes(data.notes ?? "");
+        if (data.client?.id) setClientId(data.client.id);
         setLoadingItems(false);
       })
-      .catch(() => { setItems([{ description: "", quantity: 1, unit_price: 0, total: 0, service_id: null }]); setLoadingItems(false); });
+      .catch(() => {
+        setItems([{ description: "", quantity: 1, unit_price: 0, total: 0, service_id: null }]);
+        setLoadingItems(false);
+      });
   }, [invoice.id]);
 
   function setItem(i: number, patch: Partial<InvoiceItem>) {
