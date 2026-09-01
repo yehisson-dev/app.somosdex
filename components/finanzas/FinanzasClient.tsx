@@ -5,8 +5,17 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   Plus, FileText, Printer, Trash2, CheckCircle2,
-  Send, XCircle, ChevronDown, X, Search, Package, Pencil, Eye,
+  Send, XCircle, ChevronDown, X, Search, Package, Pencil, Landmark, Receipt,
 } from "lucide-react";
+import { BancosView, type BankAccount } from "./BancosView";
+import { GastosView, type ExpenseCategory, type BankSimple, type Expense } from "./GastosView";
+import { DashboardView } from "./DashboardView";
+import { PaymentsPanel } from "./PaymentsPanel";
+import { AgingView } from "./AgingView";
+import { PnLView } from "./PnLView";
+import { ItbisView } from "./ItbisView";
+import { CashFlowView } from "./CashFlowView";
+import { RentabilidadView } from "./RentabilidadView";
 import { cn } from "@/lib/utils";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -16,7 +25,8 @@ interface InvoiceItem { id?: string; description: string; quantity: number; unit
 interface Invoice {
   id: string; invoice_number: string; status: string; issue_date: string; due_date?: string;
   subtotal: number; tax_rate: number; tax_amount: number; total: number; currency: string;
-  notes?: string; client?: Client; items?: InvoiceItem[];
+  notes?: string; company?: string; bank_account_id?: string | null;
+  client?: Client; items?: InvoiceItem[];
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -30,20 +40,27 @@ function fmtDate(d: string | Date | null | undefined) {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  draft:     { label: "Borrador",   color: "#6b7280", bg: "bg-gray-100 text-gray-600" },
-  sent:      { label: "Enviada",    color: "#3b82f6", bg: "bg-blue-100 text-blue-700" },
-  paid:      { label: "Pagada",     color: "#10b981", bg: "bg-emerald-100 text-emerald-700" },
-  cancelled: { label: "Cancelada",  color: "#ef4444", bg: "bg-red-100 text-red-600" },
+  draft:          { label: "Borrador",     color: "#6b7280", bg: "bg-gray-100 text-gray-600" },
+  sent:           { label: "Enviada",      color: "#3b82f6", bg: "bg-blue-100 text-blue-700" },
+  partially_paid: { label: "Pago parcial", color: "#f59e0b", bg: "bg-amber-100 text-amber-700" },
+  paid:           { label: "Pagada",       color: "#10b981", bg: "bg-emerald-100 text-emerald-700" },
+  cancelled:      { label: "Cancelada",    color: "#ef4444", bg: "bg-red-100 text-red-600" },
 };
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function FinanzasClient({
   initialInvoices, clients, initialServices, exchangeRate: initialRate,
-}: { initialInvoices: Invoice[]; clients: Client[]; initialServices: Service[]; exchangeRate: number }) {
+  initialBanks, initialCategories, initialExpenses, initialProspects, initialQuotes,
+}: {
+  initialInvoices: Invoice[]; clients: Client[]; initialServices: Service[]; exchangeRate: number;
+  initialBanks: BankAccount[]; initialCategories: ExpenseCategory[]; initialExpenses: Expense[];
+  initialProspects: any[]; initialQuotes: any[];
+}) {
   const router = useRouter();
   const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices);
   const [services, setServices] = useState<Service[]>(initialServices);
-  const [view, setView] = useState<"invoices" | "services">("invoices");
+  const [view, setView] = useState<"dashboard" | "invoices" | "services" | "bancos" | "gastos" | "aging" | "pnl" | "cashflow" | "itbis" | "rentabilidad">("dashboard");
+  const [paymentsInvoice, setPaymentsInvoice] = useState<Invoice | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [showServiceForm, setShowServiceForm] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
@@ -110,6 +127,13 @@ export function FinanzasClient({
       <div className="flex items-center justify-between mb-6">
         <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
           <button
+            onClick={() => setView("dashboard")}
+            className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-colors",
+              view === "dashboard" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700")}
+          >
+            📊 Dashboard
+          </button>
+          <button
             onClick={() => setView("invoices")}
             className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-colors",
               view === "invoices" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700")}
@@ -123,15 +147,66 @@ export function FinanzasClient({
           >
             <Package className="w-3.5 h-3.5 inline mr-1.5" />Servicios
           </button>
+          <button
+            onClick={() => setView("bancos")}
+            className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-colors",
+              view === "bancos" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700")}
+          >
+            <Landmark className="w-3.5 h-3.5 inline mr-1.5" />Bancos
+          </button>
+          <button
+            onClick={() => setView("gastos")}
+            className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-colors",
+              view === "gastos" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700")}
+          >
+            <Receipt className="w-3.5 h-3.5 inline mr-1.5" />Gastos
+          </button>
+          <button
+            onClick={() => setView("aging")}
+            className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-colors",
+              view === "aging" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700")}
+          >
+            📋 Cartera
+          </button>
+          <button
+            onClick={() => setView("pnl")}
+            className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-colors",
+              view === "pnl" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700")}
+          >
+            📈 P&L
+          </button>
+          <button
+            onClick={() => setView("cashflow")}
+            className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-colors",
+              view === "cashflow" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700")}
+          >
+            💸 Flujo
+          </button>
+          <button
+            onClick={() => setView("itbis")}
+            className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-colors",
+              view === "itbis" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700")}
+          >
+            🧾 ITBIS
+          </button>
+          <button
+            onClick={() => setView("rentabilidad")}
+            className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-colors",
+              view === "rentabilidad" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700")}
+          >
+            🏆 Rentabilidad
+          </button>
         </div>
 
-        <button
-          onClick={() => view === "invoices" ? setShowForm(true) : setShowServiceForm(true)}
-          className="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          {view === "invoices" ? "Nueva factura" : "Nuevo servicio"}
-        </button>
+        {(view === "invoices" || view === "services") && (
+          <button
+            onClick={() => view === "invoices" ? setShowForm(true) : setShowServiceForm(true)}
+            className="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            {view === "invoices" ? "Nueva factura" : "Nuevo servicio"}
+          </button>
+        )}
       </div>
 
       {/* ── TIPO DE CAMBIO ── */}
@@ -226,6 +301,20 @@ export function FinanzasClient({
                               <Pencil className="w-3.5 h-3.5" />
                               Editar
                             </button>
+                            {["sent","partially_paid"].includes(inv.status) && (
+                              <button onClick={() => setPaymentsInvoice(inv)}
+                                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-medium transition-colors">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                Cobros
+                              </button>
+                            )}
+                            {inv.status === "paid" && (
+                              <button onClick={() => setPaymentsInvoice(inv)}
+                                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-500 text-xs font-medium transition-colors">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                Pagos
+                              </button>
+                            )}
                             <button onClick={() => deleteInvoice(inv.id)} title="Eliminar"
                               className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
                               <Trash2 className="w-3.5 h-3.5" />
@@ -314,6 +403,67 @@ export function FinanzasClient({
         <ServiceForm
           onClose={() => setShowServiceForm(false)}
           onCreated={(svc) => { setServices((prev) => [...prev, svc].sort((a, b) => a.name.localeCompare(b.name))); setShowServiceForm(false); toast.success("Servicio guardado"); }}
+        />
+      )}
+
+      {/* ── VISTA DASHBOARD ── */}
+      {view === "dashboard" && (
+        <DashboardView
+          invoices={invoices}
+          banks={initialBanks}
+          expenses={initialExpenses}
+          categories={initialCategories}
+          prospects={initialProspects}
+          exchangeRate={exchangeRate}
+        />
+      )}
+
+      {/* ── VISTA BANCOS ── */}
+      {view === "bancos" && (
+        <BancosView
+          initialBanks={initialBanks}
+          invoices={invoices}
+          expenses={initialExpenses}
+          onUpdateInvoice={(id, data) => setInvoices(prev => prev.map(i => i.id === id ? { ...i, ...data } : i))}
+          onImported={() => router.refresh()}
+        />
+      )}
+
+      {/* ── VISTA GASTOS ── */}
+      {view === "gastos" && (
+        <GastosView
+          initialExpenses={initialExpenses}
+          initialCategories={initialCategories}
+          banks={initialBanks as BankSimple[]}
+          exchangeRate={exchangeRate}
+          invoices={invoices}
+        />
+      )}
+
+      {/* ── VISTA AGING / CARTERA ── */}
+      {view === "aging" && (
+        <AgingView
+          invoices={invoices as any[]}
+          onOpenPayments={(inv) => setPaymentsInvoice(inv as any)}
+        />
+      )}
+
+      {/* ── REPORTES ── */}
+      {view === "pnl"          && <PnLView />}
+      {view === "cashflow"     && <CashFlowView />}
+      {view === "itbis"        && <ItbisView />}
+      {view === "rentabilidad" && <RentabilidadView />}
+
+      {/* ── PANEL DE PAGOS ── */}
+      {paymentsInvoice && (
+        <PaymentsPanel
+          invoice={paymentsInvoice as any}
+          bankAccounts={(initialBanks as any[]).map((b: any) => ({ id: b.id, name: b.name }))}
+          onStatusChange={(id, status) => {
+            setInvoices(prev => prev.map(i => i.id === id ? { ...i, status } : i));
+            setPaymentsInvoice(prev => prev?.id === id ? { ...prev, status } : prev);
+          }}
+          onClose={() => setPaymentsInvoice(null)}
         />
       )}
 
@@ -588,6 +738,7 @@ function EditInvoiceForm({ invoice, clients, services, exchangeRate, onClose, on
   const [taxRate, setTaxRate]     = useState(Number(invoice.tax_rate ?? 0));
   const [currency, setCurrency]   = useState(invoice.currency ?? "USD");
   const [status, setStatus]       = useState(invoice.status ?? "draft");
+  const [company, setCompany]     = useState(invoice.company ?? "DEX");
   const [saving, setSaving]       = useState(false);
   const [loadingItems, setLoadingItems] = useState(true);
   const [items, setItems]         = useState<InvoiceItem[]>([]);
@@ -613,10 +764,14 @@ function EditInvoiceForm({ invoice, clients, services, exchangeRate, onClose, on
         if (data.status)     setStatus(data.status);
         if (data.notes)      setNotes(data.notes ?? "");
         if (data.client?.id) setClientId(data.client.id);
+        if (data.company)    setCompany(data.company);
         setLoadingItems(false);
       })
       .catch(() => {
         setItems([{ description: "", quantity: 1, unit_price: 0, total: 0, service_id: null }]);
+        // Fallback: usar los valores iniciales del prop
+        if (!issueDate && typeof invoice.issue_date === "string") setIssueDate(invoice.issue_date.slice(0, 10));
+        if (!dueDate   && typeof invoice.due_date   === "string") setDueDate(invoice.due_date.slice(0, 10));
         setLoadingItems(false);
       });
   }, [invoice.id]);
@@ -644,11 +799,12 @@ function EditInvoiceForm({ invoice, clients, services, exchangeRate, onClose, on
 
   async function save() {
     if (items.some((it) => !it.description.trim())) { toast.error("Todos los ítems deben tener descripción"); return; }
+    if (!issueDate) { toast.error("La fecha de emisión es requerida"); return; }
     setSaving(true);
     const res = await fetch(`/api/invoices/${invoice.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ client_id: clientId || null, issue_date: issueDate, due_date: dueDate || null, notes, tax_rate: taxRate, currency, status, items }),
+      body: JSON.stringify({ client_id: clientId || null, issue_date: issueDate || null, due_date: dueDate || null, notes, tax_rate: taxRate, currency, status, company, items }),
     });
     setSaving(false);
     if (res.ok) {
@@ -678,7 +834,7 @@ function EditInvoiceForm({ invoice, clients, services, exchangeRate, onClose, on
             </div>
           ) : (
             <>
-              {/* Cliente + estado */}
+              {/* Cliente + estado + empresa */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Cliente</label>
@@ -698,6 +854,15 @@ function EditInvoiceForm({ invoice, clients, services, exchangeRate, onClose, on
                     <option value="cancelled">Cancelada</option>
                   </select>
                 </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Empresa</label>
+                <select value={company} onChange={(e) => setCompany(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-400">
+                  <option value="CUBO">CUBO</option>
+                  <option value="DEX">DEX</option>
+                  <option value="YEHISSON">YEHISSON</option>
+                </select>
               </div>
 
               {/* Fechas + moneda */}
