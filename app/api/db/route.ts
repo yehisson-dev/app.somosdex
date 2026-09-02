@@ -38,7 +38,17 @@ function lit(v: unknown): string {
   if (v === null || v === undefined) return "NULL";
   if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
   if (typeof v === "number") return String(v);
-  if (Array.isArray(v)) return `'${JSON.stringify(v).replace(/'/g, "''")}'`;
+  if (Array.isArray(v)) {
+    if (v.length === 0) return "'{}'";
+    return `ARRAY[${v.map(lit).join(", ")}]`;
+  }
+  // Detect JSON-serialized arrays that arrived as strings (e.g. "[]" or "[\"a\"]")
+  if (typeof v === "string" && v.startsWith("[") && v.endsWith("]")) {
+    try {
+      const parsed = JSON.parse(v);
+      if (Array.isArray(parsed)) return lit(parsed);
+    } catch { /* fall through */ }
+  }
   if (typeof v === "object") return `'${JSON.stringify(v).replace(/'/g, "''")}'`;
   return `'${String(v).replace(/'/g, "''")}'`;
 }

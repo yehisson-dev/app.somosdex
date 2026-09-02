@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -28,6 +28,9 @@ export function TaskDetailClient({ task: initialTask, statuses, projectMembers, 
   const router = useRouter();
   const [task, setTask] = useState(initialTask);
   const [comment, setComment] = useState("");
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionedIds, setMentionedIds] = useState<string[]>([]);
+  const commentRef = useRef<HTMLTextAreaElement>(null);
   const [uploading, setUploading] = useState(false);
   const [description, setDescription] = useState(initialTask.content ?? initialTask.description ?? "");
   const [savingDesc, setSavingDesc] = useState(false);
@@ -73,29 +76,72 @@ export function TaskDetailClient({ task: initialTask, statuses, projectMembers, 
     }
   }
 
+  function handleCommentChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    const val = e.target.value;
+    setComment(val);
+    const cursor = e.target.selectionStart ?? val.length;
+    const textBeforeCursor = val.slice(0, cursor);
+    const atMatch = textBeforeCursor.match(/@(\w*)$/);
+    setMentionQuery(atMatch ? atMatch[1] : null);
+  }
+
+  function insertMention(member: UserType) {
+    const textarea = commentRef.current;
+    if (!textarea) return;
+    const cursor = textarea.selectionStart ?? comment.length;
+    const before = comment.slice(0, cursor);
+    const after = comment.slice(cursor);
+    const replaced = before.replace(/@(\w*)$/, `@${member.full_name} `);
+    setComment(replaced + after);
+    setMentionQuery(null);
+    setMentionedIds((prev) => prev.includes(member.id) ? prev : [...prev, member.id]);
+    setTimeout(() => {
+      textarea.focus();
+      const pos = replaced.length;
+      textarea.setSelectionRange(pos, pos);
+    }, 0);
+  }
+
   async function submitComment() {
     if (!comment.trim()) return;
-    const mentions: string[] = [];
+    const currentUser = projectMembers.find((m) => m.id === currentUserId);
     const { data, error } = await supabase.from("task_comments").insert({
       task_id: task.id,
       user_id: currentUserId,
       content: comment,
-      mentions,
-    } as any).select("*, user:users!task_comments_user_id_fkey(id, full_name, avatar_url)").single();
+      ...(mentionedIds.length > 0 ? { mentions: mentionedIds } : {}),
+    } as any).single();
 
-    if (!error && data) {
-      setTask((prev) => ({ ...prev, comments: [...(prev.comments ?? []), data] }));
+    if (!error) {
+      const newComment = {
+        ...(data ?? {}),
+        id: (data as any)?.id ?? crypto.randomUUID(),
+        task_id: task.id,
+        user_id: currentUserId,
+        content: comment,
+        mentions: mentionedIds,
+        created_at: new Date().toISOString(),
+        user: currentUser ?? null,
+      };
+      setTask((prev) => ({ ...prev, comments: [...(prev.comments ?? []), newComment] }));
       setComment("");
+      setMentionedIds([]);
+      setMentionQuery(null);
       router.refresh();
 
-      // Notificar al asignado si no soy yo el que comenta
       if (task.assignee_id && task.assignee_id !== currentUserId) {
         await createNotification(task.assignee_id, "task_comment", `Nuevo comentario en: ${task.title}`);
       }
-      // Notificar al aprobador si no soy yo
       if (task.approver_id && task.approver_id !== currentUserId && task.approver_id !== task.assignee_id) {
         await createNotification(task.approver_id, "task_comment", `Nuevo comentario en: ${task.title}`);
       }
+      for (const uid of mentionedIds) {
+        if (uid !== currentUserId && uid !== task.assignee_id && uid !== task.approver_id) {
+          await createNotification(uid, "task_comment", `Te mencionaron en: ${task.title}`);
+        }
+      }
+    } else {
+      toast.error("Error al enviar el comentario");
     }
   }
 
@@ -255,20 +301,16 @@ export function TaskDetailClient({ task: initialTask, statuses, projectMembers, 
 
   async function updateScheduledDate(scheduled_date: string) {
     const val = scheduled_date || null;
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("tasks")
       .update({ scheduled_date: val } as any)
-      .eq("id", task.id)
-      .select("scheduled_at")
-      .single();
-    if (!error && data) {
-      setTask((prev) => ({
-        ...prev,
-        scheduled_date: val,
-        scheduled_at: (data as any).scheduled_at ?? prev.scheduled_at,
-      }));
+      .eq("id", task.id);
+    if (!error) {
+      setTask((prev) => ({ ...prev, scheduled_date: val }));
       router.refresh();
       toast.success(val ? "Tarea marcada como programada" : "Fecha programada eliminada");
+    } else {
+      toast.error("Error al guardar la fecha programada");
     }
   }
 
@@ -591,26 +633,63 @@ export function TaskDetailClient({ task: initialTask, statuses, projectMembers, 
                       <span className="text-xs font-medium text-gray-700">{c.user?.full_name}</span>
                       <span className="text-[10px] text-gray-400">{formatRelativeDate(c.created_at)}</span>
                     </div>
-                    <p className="text-xs text-gray-600 leading-relaxed">{c.content}</p>
+                    <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">
+                      {c.content.split(/(@\w[\w\s]*?)(?=\s|$|@)/g).map((part, i) =>
+                        part.startsWith("@") ? (
+                          <span key={i} className="text-violet-600 font-medium">{part}</span>
+                        ) : part
+                      )}
+                    </p>
                   </div>
                 </div>
               ))}
             </div>
 
-            <div className="flex gap-2">
-              <textarea
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                placeholder="Escribe un comentario... (@usuario para mencionar)"
-                rows={2}
-                className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-800 placeholder:text-gray-400 resize-none focus:outline-none focus:border-violet-300"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    submitComment();
-                  }
-                }}
-              />
+            <div className="relative flex gap-2">
+              <div className="flex-1 relative">
+                {mentionQuery !== null && (
+                  <div className="absolute bottom-full mb-1 left-0 z-50 bg-white border border-gray-200 rounded-lg shadow-lg w-56 max-h-48 overflow-y-auto">
+                    {projectMembers
+                      .filter((m) =>
+                        m.full_name?.toLowerCase().includes(mentionQuery.toLowerCase())
+                      )
+                      .map((m) => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onMouseDown={(e) => { e.preventDefault(); insertMention(m); }}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-violet-50 hover:text-violet-700 text-left"
+                        >
+                          <Avatar className="w-5 h-5 shrink-0">
+                            <AvatarImage src={m.avatar_url ?? undefined} />
+                            <AvatarFallback className="text-[8px] bg-violet-100 text-violet-600">
+                              {getInitials(m.full_name)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span>{m.full_name}</span>
+                        </button>
+                      ))}
+                    {projectMembers.filter((m) => m.full_name?.toLowerCase().includes((mentionQuery ?? "").toLowerCase())).length === 0 && (
+                      <p className="px-3 py-2 text-xs text-gray-400">Sin resultados</p>
+                    )}
+                  </div>
+                )}
+                <textarea
+                  ref={commentRef}
+                  value={comment}
+                  onChange={handleCommentChange}
+                  placeholder="Escribe un comentario... (@nombre para mencionar)"
+                  rows={2}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-800 placeholder:text-gray-400 resize-none focus:outline-none focus:border-violet-300"
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") { setMentionQuery(null); return; }
+                    if (e.key === "Enter" && !e.shiftKey && mentionQuery === null) {
+                      e.preventDefault();
+                      submitComment();
+                    }
+                  }}
+                />
+              </div>
               <Button
                 size="sm"
                 onClick={submitComment}
@@ -817,21 +896,13 @@ function DeliverableRow({
     rejected: "Cambios solicitados",
   };
 
-  async function downloadFile() {
-    try {
-      const response = await fetch(deliverable.file_url);
-      const blob = await response.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = deliverable.file_name;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(blobUrl);
-    } catch {
-      window.open(deliverable.file_url, "_blank");
-    }
+  function downloadFile() {
+    const a = document.createElement("a");
+    a.href = deliverable.file_url + "?download=1";
+    a.download = deliverable.file_name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   }
 
   return (
@@ -841,7 +912,14 @@ function DeliverableRow({
         {/* Preview */}
         {deliverable.thumbnail_url ? (
           <div className="w-14 h-10 rounded-md overflow-hidden bg-gray-100 shrink-0">
-            <img src={deliverable.thumbnail_url} alt="" className="w-full h-full object-cover" />
+            <img
+              src={deliverable.thumbnail_url}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              className="w-full h-full object-cover"
+              onError={(e) => { (e.target as HTMLImageElement).parentElement!.style.display = "none"; }}
+            />
           </div>
         ) : (
           <div className="w-14 h-10 rounded-md bg-gray-100 flex items-center justify-center shrink-0">
@@ -971,7 +1049,12 @@ function DeliverableRow({
             </div>
           </div>
           {isImage && (
-            <img src={deliverable.file_url} alt={deliverable.file_name} className="w-full max-h-[82vh] object-contain rounded-lg" />
+            <img
+              src={deliverable.file_url}
+              alt={deliverable.file_name}
+              decoding="async"
+              className="w-full max-h-[82vh] object-contain rounded-lg"
+            />
           )}
           {isVideo && (
             <video src={deliverable.file_url} controls autoPlay className="w-full max-h-[82vh] rounded-lg bg-black" />
