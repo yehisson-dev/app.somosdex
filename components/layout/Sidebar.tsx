@@ -22,6 +22,7 @@ import {
   DollarSign,
   BarChart2,
   Search,
+  CalendarDays,
 } from "lucide-react";
 import { cn, getInitials } from "@/lib/utils";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -105,6 +106,9 @@ export function Sidebar() {
         <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
           <NavItem href="/mis-tareas"  icon={<CheckSquare   className="w-4 h-4" />} label="Mis tareas"     active={pathname === "/mis-tareas"} />
           <NavItem href="/pendientes"  icon={<Clock         className="w-4 h-4" />} label="Pendientes hoy" active={pathname === "/pendientes"} />
+          {session?.user?.email === "yehisson@somosdex.com" && (
+            <NavItem href="/mi-semana" icon={<CalendarDays className="w-4 h-4" />} label="Mi semana" active={pathname.startsWith("/mi-semana")} />
+          )}
           <NavItemWithBadge href="/mensajes" icon={<MessageSquare className="w-4 h-4" />} label="Mensajes" active={pathname.startsWith("/mensajes")} />
           <NavItem href="/pizarras" icon={<LayoutDashboard className="w-4 h-4" />} label="Pizarras" active={pathname.startsWith("/pizarras")} />
           <NavItem href="/contenido" icon={<Search className="w-4 h-4" />} label="Contenidos" active={pathname.startsWith("/contenido")} />
