@@ -4,10 +4,10 @@ import { useState, useRef, useEffect } from "react";
 import {
   X, Camera, Loader2, Check, User, Briefcase, Mail,
   Globe, Phone, MapPin, Building2, LayoutDashboard,
+  Calendar, Copy, RefreshCw, CheckCheck,
 } from "lucide-react";
 import { cn, getInitials } from "@/lib/utils";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { createClient } from "@/lib/supabase/client";
 import { useSession } from "next-auth/react";
 import { useAppStore, type WorkspaceSettings } from "@/store/useAppStore";
 import type { User as UserType } from "@/types/database";
@@ -27,12 +27,17 @@ const ROLE_LABELS: Record<string, string> = {
 
 export function ProfileDrawer({ open, onClose, user, onSaved }: Props) {
   const { update: updateSession } = useSession();
-  const supabase = createClient();
-  const avatarFileRef  = useRef<HTMLInputElement>(null);
-  const logoFileRef    = useRef<HTMLInputElement>(null);
+  const avatarFileRef = useRef<HTMLInputElement>(null);
+  const logoFileRef   = useRef<HTMLInputElement>(null);
 
   const isAdmin = user.role === "admin";
   const [tab, setTab] = useState<"profile" | "workspace">("profile");
+
+  // ── Calendar token ───────────────────────────────────────────────────────────
+  const [calToken,      setCalToken]      = useState<string | null>(null);
+  const [calCopied,     setCalCopied]     = useState(false);
+  const [calResetting,  setCalResetting]  = useState(false);
+  const calUrl = calToken ? `https://app.somosdex.com/api/calendar/${calToken}` : null;
 
   // ── Profile state ────────────────────────────────────────────────────────────
   const [fullName, setFullName] = useState(user.full_name ?? "");
@@ -44,16 +49,11 @@ export function ProfileDrawer({ open, onClose, user, onSaved }: Props) {
   const [error, setError]         = useState("");
 
   // ── Workspace state ──────────────────────────────────────────────────────────
-  const { workspaceSettings, setWorkspaceSettings } = useAppStore();
-  const [ws, setWs]           = useState<WorkspaceSettings | null>(null);
-  const [wsDraft, setWsDraft] = useState({
-    platform_name: "",
-    company_name: "",
-    company_email: "",
-    company_phone: "",
-    company_website: "",
-    company_address: "",
-    logo_url: "",
+  const { setWorkspaceSettings } = useAppStore();
+  const [wsId, setWsId]         = useState<string | null>(null);
+  const [wsDraft, setWsDraft]   = useState({
+    platform_name: "", company_name: "", company_email: "",
+    company_phone: "", company_website: "", company_address: "", logo_url: "",
   });
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [savingWs, setSavingWs]           = useState(false);
@@ -67,33 +67,33 @@ export function ProfileDrawer({ open, onClose, user, onSaved }: Props) {
     setAvatarUrl(user.avatar_url ?? "");
     setError(""); setSaved(false);
 
-    // Load workspace settings
-    if (isAdmin) {
-      async function loadWs() {
-        const { data } = await supabase
-          .from("workspace_settings")
-          .select("*")
-          .limit(1)
-          .single();
-        if (data) {
-          const s = data as WorkspaceSettings;
-          setWs(s);
-          setWsDraft({
-            platform_name:   s.platform_name ?? "Cowork Agency",
-            company_name:    s.company_name ?? "",
-            company_email:   s.company_email ?? "",
-            company_phone:   s.company_phone ?? "",
-            company_website: s.company_website ?? "",
-            company_address: s.company_address ?? "",
-            logo_url:        s.logo_url ?? "",
-          });
-        }
-      }
-      loadWs();
-    }
-  }, [open, user]);
+    // Cargar calendar token
+    fetch("/api/users/calendar-token")
+      .then(r => r.json())
+      .then(d => setCalToken(d.token ?? null))
+      .catch(() => {});
 
-  // Close on Escape
+    if (isAdmin) {
+      fetch("/api/workspace-settings")
+        .then((r) => r.json())
+        .then((data) => {
+          if (data) {
+            setWsId(data.id ?? null);
+            setWsDraft({
+              platform_name:   data.platform_name ?? "Cowork Agency",
+              company_name:    data.company_name ?? "",
+              company_email:   data.company_email ?? "",
+              company_phone:   data.company_phone ?? "",
+              company_website: data.company_website ?? "",
+              company_address: data.company_address ?? "",
+              logo_url:        data.logo_url ?? "",
+            });
+          }
+        })
+        .catch(() => {});
+    }
+  }, [open, user, isAdmin]);
+
   useEffect(() => {
     if (!open) return;
     const fn = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -107,30 +107,40 @@ export function ProfileDrawer({ open, onClose, user, onSaved }: Props) {
     if (!file) return;
     setUploading(true); setError("");
     try {
-      const ext  = file.name.split(".").pop();
-      const path = `${user.id}.${ext}`;
-      const { error: err } = await supabase.storage.from("avatars").upload(path, file, { upsert: true, contentType: file.type });
-      if (err) throw err;
-      const { data } = supabase.storage.from("avatars").getPublicUrl(path);
-      setAvatarUrl(`${data.publicUrl}?t=${Date.now()}`);
-    } catch { setError("Error al subir la imagen."); }
-    finally { setUploading(false); }
+      const res = await fetch(
+        `/api/upload?filename=${encodeURIComponent(file.name)}&mimetype=${encodeURIComponent(file.type)}`,
+        { method: "POST", body: file }
+      );
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      setAvatarUrl(data.url);
+    } catch {
+      setError("Error al subir la imagen.");
+    } finally {
+      setUploading(false);
+    }
   }
 
   // ── Profile save ─────────────────────────────────────────────────────────────
   async function handleSave() {
     if (!fullName.trim()) { setError("El nombre es requerido."); return; }
     setSaving(true); setError("");
-    const { error: dbErr } = await supabase.from("users").update({
-      full_name: fullName.trim(),
-      job_title: jobTitle.trim() || null,
-      avatar_url: avatarUrl || null,
-    } as any).eq("id", user.id);
-    if (dbErr) { setError("Error al guardar."); setSaving(false); return; }
-    await updateSession();
-    onSaved({ full_name: fullName.trim(), job_title: jobTitle.trim() || null, avatar_url: avatarUrl || null });
-    setSaving(false); setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    try {
+      const res = await fetch(`/api/users/${user.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ full_name: fullName.trim(), job_title: jobTitle.trim() || null, avatar_url: avatarUrl || null }),
+      });
+      if (!res.ok) throw new Error("Save failed");
+      await updateSession();
+      onSaved({ full_name: fullName.trim(), job_title: jobTitle.trim() || null, avatar_url: avatarUrl || null });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      setError("Error al guardar.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   // ── Workspace logo upload ────────────────────────────────────────────────────
@@ -138,40 +148,69 @@ export function ProfileDrawer({ open, onClose, user, onSaved }: Props) {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingLogo(true);
-    const ext  = file.name.split(".").pop();
-    const path = `logo.${ext}`;
-    const { error: err } = await supabase.storage.from("workspace").upload(path, file, { upsert: true });
-    if (err) { setUploadingLogo(false); return; }
-    const { data } = supabase.storage.from("workspace").getPublicUrl(path);
-    const url = `${data.publicUrl}?t=${Date.now()}`;
-    setWsDraft((d) => ({ ...d, logo_url: url }));
-    setUploadingLogo(false);
+    try {
+      const res = await fetch(
+        `/api/upload?filename=${encodeURIComponent(file.name)}&mimetype=${encodeURIComponent(file.type)}`,
+        { method: "POST", body: file }
+      );
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      setWsDraft((d) => ({ ...d, logo_url: data.url }));
+    } catch {
+      // silently fail
+    } finally {
+      setUploadingLogo(false);
+    }
+  }
+
+  // ── Calendar helpers ─────────────────────────────────────────────────────────
+  async function handleCopyCalUrl() {
+    if (!calUrl) return;
+    await navigator.clipboard.writeText(calUrl);
+    setCalCopied(true);
+    setTimeout(() => setCalCopied(false), 2000);
+  }
+
+  async function handleResetCalToken() {
+    setCalResetting(true);
+    try {
+      const res = await fetch("/api/users/calendar-token", { method: "POST" });
+      const d = await res.json();
+      setCalToken(d.token ?? null);
+    } finally { setCalResetting(false); }
   }
 
   // ── Workspace save ───────────────────────────────────────────────────────────
   async function handleSaveWorkspace() {
     if (!wsDraft.platform_name.trim()) return;
     setSavingWs(true);
-    const payload = {
-      platform_name:   wsDraft.platform_name.trim(),
-      company_name:    wsDraft.company_name.trim() || null,
-      company_email:   wsDraft.company_email.trim() || null,
-      company_phone:   wsDraft.company_phone.trim() || null,
-      company_website: wsDraft.company_website.trim() || null,
-      company_address: wsDraft.company_address.trim() || null,
-      logo_url:        wsDraft.logo_url || null,
-      updated_at:      new Date().toISOString(),
-    };
-    const { data, error: err } = ws?.id
-      ? await supabase.from("workspace_settings").update(payload as any).eq("id", ws.id).select().single()
-      : await supabase.from("workspace_settings").insert(payload as any).select().single();
-    if (!err && data) {
-      const updated = data as WorkspaceSettings;
-      setWs(updated);
-      setWorkspaceSettings(updated);
+    try {
+      const res = await fetch("/api/workspace-settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          platform_name:   wsDraft.platform_name.trim(),
+          company_name:    wsDraft.company_name.trim() || null,
+          company_email:   wsDraft.company_email.trim() || null,
+          company_phone:   wsDraft.company_phone.trim() || null,
+          company_website: wsDraft.company_website.trim() || null,
+          company_address: wsDraft.company_address.trim() || null,
+          logo_url:        wsDraft.logo_url || null,
+        }),
+      });
+      if (!res.ok) throw new Error("Save failed");
+      const updated = await res.json();
+      if (updated) {
+        setWsId(updated.id);
+        setWorkspaceSettings(updated as WorkspaceSettings);
+      }
+      setSavedWs(true);
+      setTimeout(() => setSavedWs(false), 2000);
+    } catch {
+      // silently fail
+    } finally {
+      setSavingWs(false);
     }
-    setSavingWs(false); setSavedWs(true);
-    setTimeout(() => setSavedWs(false), 2000);
   }
 
   if (!open) return null;
@@ -254,6 +293,47 @@ export function ProfileDrawer({ open, onClose, user, onSaved }: Props) {
                 </div>
               </div>
 
+              {/* ── Google Calendar ─────────────────────────────────────────── */}
+              <div className="pt-1">
+                <div className="h-px bg-gray-100 mb-4" />
+                <div className="flex items-center gap-2 mb-3">
+                  <Calendar className="w-4 h-4 text-blue-500" />
+                  <p className="text-xs font-semibold text-gray-700">Sincronizar con Google Calendar</p>
+                </div>
+                <p className="text-[11px] text-gray-500 leading-relaxed mb-3">
+                  Copia esta URL y agrégala como <strong>calendario por URL</strong> en Google Calendar. Tus tareas y entregas aparecerán automáticamente.
+                </p>
+
+                {/* URL box */}
+                <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
+                  <span className="flex-1 text-[10px] text-gray-500 font-mono truncate">
+                    {calUrl ?? "Cargando…"}
+                  </span>
+                  <button
+                    onClick={handleCopyCalUrl}
+                    disabled={!calUrl}
+                    title="Copiar URL"
+                    className="shrink-0 p-1.5 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-gray-700 transition-colors disabled:opacity-40">
+                    {calCopied ? <CheckCheck className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                  <button
+                    onClick={handleResetCalToken}
+                    disabled={calResetting}
+                    title="Regenerar URL (invalida la anterior)"
+                    className="shrink-0 p-1.5 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-gray-700 transition-colors disabled:opacity-40">
+                    <RefreshCw className={cn("w-3.5 h-3.5", calResetting && "animate-spin")} />
+                  </button>
+                </div>
+
+                {/* Instrucciones paso a paso */}
+                <div className="mt-3 space-y-1.5 text-[10px] text-gray-400 leading-relaxed">
+                  <p>① En Google Calendar → Otros calendarios → <strong>+</strong> → "Desde URL"</p>
+                  <p>② Pega la URL de arriba y haz clic en <strong>Agregar calendario</strong></p>
+                  <p>③ Las tareas con fecha de entrega aparecerán como eventos de todo el día</p>
+                  <p className="text-[9px] text-gray-300 pt-1">El ícono 🔄 genera una nueva URL si deseas invalidar la anterior.</p>
+                </div>
+              </div>
+
               {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
             </div>
 
@@ -305,7 +385,6 @@ export function ProfileDrawer({ open, onClose, user, onSaved }: Props) {
               </div>
 
               <div className="space-y-3">
-                {/* Platform name */}
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1.5 flex items-center gap-1.5">
                     <LayoutDashboard className="w-3.5 h-3.5 text-violet-500" /> Nombre de la plataforma
@@ -380,7 +459,6 @@ export function ProfileDrawer({ open, onClose, user, onSaved }: Props) {
   );
 }
 
-// ── Sub-components ─────────────────────────────────────────────────────────────
 function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button

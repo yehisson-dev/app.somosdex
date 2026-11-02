@@ -6,20 +6,13 @@ type Params = { params: Promise<{ id: string }> };
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.somosdex.com";
 
-const COMPANY = {
-  logo:    `${BASE_URL}/logo-dex.jpg`,
-  name:    "Dex",
-  phone:   "(809) 769 3893",
-  address: "Santiago, República Dominicana 51800",
-  rnc:     "RNC 1-32-95841-1",
-  email:   "yehisson@somosdex.com",
-};
 
 function fmt(n: number | string, currency = "USD") {
   return new Intl.NumberFormat("es-DO", { style: "currency", currency }).format(Number(n));
 }
-function fmtDate(d: string) {
-  return new Date(d + "T00:00:00").toLocaleDateString("es-DO", { day: "numeric", month: "long", year: "numeric" });
+function fmtDate(d: string | null | undefined) {
+  if (!d) return "—";
+  return new Date(d.slice(0, 10) + "T00:00:00").toLocaleDateString("es-DO", { day: "numeric", month: "long", year: "numeric" });
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -36,7 +29,11 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
   const { id } = await params;
   const rows = await sql`
-    SELECT i.*,
+    SELECT
+      i.id, i.invoice_number, i.status, i.currency, i.notes,
+      i.tax_rate, i.tax_amount, i.subtotal, i.total, i.company,
+      to_char(i.issue_date, 'YYYY-MM-DD') AS issue_date,
+      to_char(i.due_date,   'YYYY-MM-DD') AS due_date,
       CASE WHEN c.id IS NOT NULL THEN json_build_object(
         'id',c.id,'name',c.name,'email',c.email,'company',c.company,'address',c.address
       ) END AS client,
@@ -53,6 +50,11 @@ export async function GET(_req: NextRequest, { params }: Params) {
   if (!rows[0]) return new NextResponse("Not found", { status: 404 });
 
   const inv = rows[0] as any;
+
+  // Load company from DB
+  const coRows = await sql`SELECT * FROM companies WHERE id = ${inv.company ?? "DEX"} LIMIT 1`;
+  const co = (coRows[0] as any) ?? { name: "Dex", rnc: "RNC 1-32-95841-1", phone: "(809) 769 3893", address: "Santiago, República Dominicana 51800", email: "yehisson@somosdex.com" };
+
   const client = inv.client ?? {};
   const items: any[] = inv.items ?? [];
   const statusColor = STATUS_COLORS[inv.status] ?? "#6b7280";
@@ -139,13 +141,13 @@ export async function GET(_req: NextRequest, { params }: Params) {
   <!-- HEADER -->
   <div class="header">
     <div>
-      <img src="${COMPANY.logo}" alt="Dex" class="logo" />
+      ${co.logo_url ? `<img src="${BASE_URL}${co.logo_url}" alt="${co.name}" class="logo" />` : ""}
       <div class="company-info">
-        <strong>${COMPANY.name}</strong>
-        ${COMPANY.phone}<br>
-        ${COMPANY.address}<br>
-        ${COMPANY.rnc}<br>
-        ${COMPANY.email}
+        <strong>${co.name}</strong>
+        ${co.phone ? co.phone + "<br>" : ""}
+        ${co.address ? co.address + "<br>" : ""}
+        ${co.rnc ? co.rnc + "<br>" : ""}
+        ${co.email ?? ""}
       </div>
     </div>
     <div class="invoice-meta">

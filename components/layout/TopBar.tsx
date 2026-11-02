@@ -1,28 +1,39 @@
 "use client";
 
 import { useState } from "react";
-import { Bell } from "lucide-react";
+import { Bell, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/useAppStore";
 import { NotificationPanel } from "@/components/notifications/NotificationPanel";
+import { SearchTrigger } from "@/components/search/GlobalSearch";
+import Link from "next/link";
 
 interface TopBarProps {
   title: string;
   subtitle?: string;
+  backHref?: string;
 }
 
-export function TopBar({ title, subtitle }: TopBarProps) {
+export function TopBar({ title, subtitle, backHref }: TopBarProps) {
   const { unreadCount } = useAppStore();
   const [panelOpen, setPanelOpen] = useState(false);
 
   return (
     <header className="h-14 border-b border-gray-200 flex items-center justify-between px-6 bg-white shrink-0 relative">
-      <div>
-        <h1 className="text-sm font-semibold text-gray-900">{title}</h1>
-        {subtitle && <p className="text-xs text-gray-400">{subtitle}</p>}
+      <div className="flex items-center gap-3">
+        {backHref && (
+          <Link href={backHref} className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors">
+            <ArrowLeft className="w-4 h-4" />
+          </Link>
+        )}
+        <div>
+          <h1 className="text-sm font-semibold text-gray-900">{title}</h1>
+          {subtitle && <p className="text-xs text-gray-400">{subtitle}</p>}
+        </div>
       </div>
 
       <div className="flex items-center gap-2 relative">
+        <SearchTrigger />
         <button
           onClick={() => setPanelOpen((v) => !v)}
           className={cn(

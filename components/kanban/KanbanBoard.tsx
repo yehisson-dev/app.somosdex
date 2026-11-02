@@ -115,7 +115,14 @@ export function KanbanBoard({
     (statusId: string) =>
       tasks
         .filter((t) => t.status_id === statusId)
-        .sort((a, b) => a.position - b.position),
+        .sort((a, b) => {
+          const da = a.due_date ? String(a.due_date).slice(0, 10) : null;
+          const db = b.due_date ? String(b.due_date).slice(0, 10) : null;
+          if (!da && !db) return a.position - b.position;
+          if (!da) return 1;
+          if (!db) return -1;
+          return da.localeCompare(db);
+        }),
     [tasks]
   );
 

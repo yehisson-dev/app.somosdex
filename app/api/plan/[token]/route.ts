@@ -1,16 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/server";
+import sql from "@/lib/db";
 
-// Platform → project keyword mapping
 const PLATFORM_PROJECT_KEYWORD: Record<string, string> = {
-  instagram: "social",
-  tiktok:    "social",
-  twitter:   "social",
-  facebook:  "social",
-  youtube:   "social",
-  linkedin:  "social",
-  blog:      "seo",
-  podcast:   "evento",
+  instagram: "social", tiktok: "social", twitter: "social",
+  facebook: "social",  youtube: "social", linkedin: "social",
+  blog: "seo", podcast: "evento",
 };
 
 const MONTHS_ES = [
@@ -18,59 +12,30 @@ const MONTHS_ES = [
   "julio","agosto","septiembre","octubre","noviembre","diciembre",
 ];
 
-/**
- * After a client approves a post, create a task in the matching project.
- * Errors here are non-fatal — approval still succeeds even if task creation fails.
- */
 async function createTaskFromApproval(opts: {
-  platform: string;
-  clientId: string;
-  postType: string | null;
-  publishDate: string | null;
-  caption: string | null;
+  platform: string; clientId: string;
+  postType: string | null; publishDate: string | null; caption: string | null;
 }) {
-  const supabase = createAdminClient();
-
   const keyword = PLATFORM_PROJECT_KEYWORD[opts.platform.toLowerCase()];
   if (!keyword) return;
 
-  // Find project whose name contains the keyword (case-insensitive)
-  const { data: projects } = await supabase
-    .from("projects")
-    .select("id")
-    .ilike("name", `%${keyword}%`)
-    .limit(1);
-
-  const project = projects?.[0];
+  const projects = await sql`SELECT id FROM projects WHERE name ILIKE ${"%" + keyword + "%"} LIMIT 1`;
+  const project = projects[0] as any;
   if (!project) return;
 
-  // Get first status of that project (lowest position = "pendiente")
-  const { data: statuses } = await supabase
-    .from("project_statuses")
-    .select("id")
-    .eq("project_id", project.id)
-    .order("position", { ascending: true })
-    .limit(1);
+  const statuses = await sql`SELECT id FROM project_statuses WHERE project_id = ${project.id} ORDER BY position ASC LIMIT 1`;
+  const statusId = (statuses[0] as any)?.id ?? null;
 
-  const statusId = statuses?.[0]?.id ?? null;
-
-  // Build task title: "Reel 12 de junio"
-  const date = opts.publishDate ? new Date(opts.publishDate) : new Date();
+  const date  = opts.publishDate ? new Date(opts.publishDate) : new Date();
   const day   = date.getUTCDate();
   const month = MONTHS_ES[date.getUTCMonth()];
   const type  = opts.postType?.trim() || opts.platform;
   const title = `${type} ${day} de ${month}`;
 
-  await supabase.from("tasks").insert({
-    title,
-    project_id:   project.id,
-    status_id:    statusId,
-    client_id:    opts.clientId,
-    priority:     "medium",
-    position:     0,
-    content:      opts.caption || null,
-    content_type: "text",
-  } as any);
+  await sql`
+    INSERT INTO tasks (title, project_id, status_id, client_id, priority, position, content, content_type)
+    VALUES (${title}, ${project.id}, ${statusId}, ${opts.clientId}, 'medium', 0, ${opts.caption ?? null}, 'text')
+  `;
 }
 
 export async function POST(
@@ -80,82 +45,69 @@ export async function POST(
   const { token } = await params;
   const body = await req.json();
   const { postId, action, content, authorName } = body as {
-    postId: string;
-    action: "approve" | "reject" | "comment";
-    content?: string;
-    authorName: string;
+    postId: string; action: "approve" | "reject" | "comment";
+    content?: string; authorName: string;
   };
 
-  if (!postId || !action || !authorName) {
+  if (!postId || !action || !authorName)
     return NextResponse.json({ error: "Datos incompletos" }, { status: 400 });
-  }
 
-  const supabase = createAdminClient();
-
-  // Validate token → plan → post ownership
-  const { data: plan } = await supabase
-    .from("content_plans")
-    .select("id, platform, client_id")
-    .eq("share_token", token)
-    .eq("is_published", true)
-    .single();
-
+  // Validar token → plan publicado
+  const plans = await sql`
+    SELECT id, platform, client_id FROM content_plans
+    WHERE share_token = ${token} AND is_published = true
+    LIMIT 1
+  `;
+  const plan = plans[0] as any;
   if (!plan) return NextResponse.json({ error: "Plan no encontrado" }, { status: 404 });
 
-  const { data: post } = await supabase
-    .from("content_posts")
-    .select("id, post_type, publish_date, caption")
-    .eq("id", postId)
-    .eq("plan_id", plan.id)
-    .single();
-
+  // Validar que el post pertenece al plan
+  const posts = await sql`
+    SELECT id, post_type, to_char(publish_date,'YYYY-MM-DD') AS publish_date, caption
+    FROM content_posts WHERE id = ${postId} AND plan_id = ${plan.id} LIMIT 1
+  `;
+  const post = posts[0] as any;
   if (!post) return NextResponse.json({ error: "Publicación no encontrada" }, { status: 404 });
 
-  // Execute action
   if (action === "approve") {
-    await supabase.from("content_posts").update({ status: "approved" } as any).eq("id", postId);
-    await supabase.from("content_post_comments").insert({
-      post_id:     postId,
-      content:     "✅ Publicación aprobada",
-      author_name: authorName,
-      is_client:   true,
-    } as any);
-
-    // Create task in the matching project (fire-and-forget, non-fatal)
+    await sql`UPDATE content_posts SET status = 'approved' WHERE id = ${postId}`;
+    await sql`
+      INSERT INTO content_post_comments (post_id, content, author_name, is_client)
+      VALUES (${postId}, '✅ Publicación aprobada', ${authorName}, true)
+    `;
     createTaskFromApproval({
-      platform:    (plan as any).platform,
-      clientId:    (plan as any).client_id,
-      postType:    (post as any).post_type,
-      publishDate: (post as any).publish_date,
-      caption:     (post as any).caption,
+      platform: plan.platform, clientId: plan.client_id,
+      postType: post.post_type, publishDate: post.publish_date, caption: post.caption,
     }).catch((err) => console.error("[plan/approve] Error creando tarea:", err));
 
   } else if (action === "reject") {
-    await supabase.from("content_posts").update({ status: "rejected" } as any).eq("id", postId);
+    await sql`UPDATE content_posts SET status = 'rejected' WHERE id = ${postId}`;
     if (content?.trim()) {
-      await supabase.from("content_post_comments").insert({
-        post_id:     postId,
-        content,
-        author_name: authorName,
-        is_client:   true,
-      } as any);
+      await sql`
+        INSERT INTO content_post_comments (post_id, content, author_name, is_client)
+        VALUES (${postId}, ${content}, ${authorName}, true)
+      `;
     }
   } else if (action === "comment") {
     if (!content?.trim()) return NextResponse.json({ error: "Comentario vacío" }, { status: 400 });
-    await supabase.from("content_post_comments").insert({
-      post_id:     postId,
-      content,
-      author_name: authorName,
-      is_client:   true,
-    } as any);
+    await sql`
+      INSERT INTO content_post_comments (post_id, content, author_name, is_client)
+      VALUES (${postId}, ${content}, ${authorName}, true)
+    `;
   }
 
-  // Return fresh post data
-  const { data: updated } = await supabase
-    .from("content_posts")
-    .select("*, comments:content_post_comments(*)")
-    .eq("id", postId)
-    .single();
+  // Devolver post actualizado
+  const updated = await sql`
+    SELECT p.*,
+      COALESCE((
+        SELECT json_agg(json_build_object(
+          'id', c.id, 'content', c.content, 'author_name', c.author_name,
+          'is_client', c.is_client, 'created_at', c.created_at
+        ) ORDER BY c.created_at)
+        FROM content_post_comments c WHERE c.post_id = p.id
+      ), '[]') AS comments
+    FROM content_posts p WHERE p.id = ${postId} LIMIT 1
+  `;
 
-  return NextResponse.json({ post: updated });
+  return NextResponse.json({ post: updated[0] });
 }

@@ -3,6 +3,9 @@ export type TaskPriority = "low" | "medium" | "high" | "urgent";
 export type DeliverableStatus = "pending" | "approved" | "rejected";
 export type NotificationType =
   | "task_assigned"
+  | "subtask_assigned"
+  | "subtask_status"
+  | "subtask_unassigned"
   | "deliverable_uploaded"
   | "deliverable_approved"
   | "deliverable_rejected"

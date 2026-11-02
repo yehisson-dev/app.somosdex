@@ -23,6 +23,9 @@ interface Props {
 
 const TYPE_CONFIG: Record<NotificationType, { icon: React.ReactNode; color: string; label: string }> = {
   task_assigned:          { icon: <CheckSquare className="w-4 h-4" />,  color: "text-violet-600 bg-violet-50",  label: "Tarea asignada" },
+  subtask_assigned:       { icon: <CheckSquare className="w-4 h-4" />,  color: "text-indigo-600 bg-indigo-50",  label: "Subtarea asignada" },
+  subtask_status:         { icon: <Clock className="w-4 h-4" />,         color: "text-sky-600 bg-sky-50",         label: "Subtarea actualizada" },
+  subtask_unassigned:     { icon: <XCircle className="w-4 h-4" />,       color: "text-gray-500 bg-gray-100",      label: "Removido de subtarea" },
   deliverable_uploaded:   { icon: <Upload className="w-4 h-4" />,       color: "text-blue-600 bg-blue-50",      label: "Entregable subido" },
   deliverable_approved:   { icon: <CheckCircle className="w-4 h-4" />,  color: "text-green-600 bg-green-50",    label: "Entregable aprobado" },
   deliverable_rejected:   { icon: <XCircle className="w-4 h-4" />,      color: "text-red-600 bg-red-50",        label: "Entregable rechazado" },

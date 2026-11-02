@@ -235,6 +235,122 @@ function BriefPanel({ clientId, briefToken, briefData: rawBriefData }: {
   );
 }
 
+// ── Onboarding Panel ──────────────────────────────────────────────────────────
+const ONBOARDING_STEPS = [
+  { id: "empresa",      title: "Datos de la empresa" },
+  { id: "contacto",     title: "Contactos" },
+  { id: "marca",        title: "Identidad de marca" },
+  { id: "audiencia",    title: "Cliente objetivo" },
+  { id: "competencia",  title: "Competencia" },
+  { id: "redes",        title: "Redes sociales" },
+  { id: "objetivos",    title: "Objetivos" },
+  { id: "restricciones",title: "Restricciones" },
+];
+
+function OnboardingPanel({ onboardingToken, onboardingData: rawData }: {
+  onboardingToken: string;
+  onboardingData: Record<string, string> | string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const data: Record<string, string> | null = (() => {
+    if (!rawData) return null;
+    if (typeof rawData === "string") { try { return JSON.parse(rawData); } catch { return null; } }
+    return rawData as Record<string, string>;
+  })();
+
+  const hasData = data && Object.keys(data).length > 0;
+  const appUrl = typeof window !== "undefined" ? window.location.origin : "https://app.somosdex.com";
+  const link = `${appUrl}/onboarding/${onboardingToken}`;
+  const filled = hasData ? Object.values(data).filter(v => v?.trim()).length : 0;
+
+  function copy() {
+    navigator.clipboard.writeText(link);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div className="bg-blue-50/60 rounded-2xl flex flex-col overflow-hidden border border-blue-100">
+      <div className="flex items-center justify-between px-4 py-3 bg-white/70 border-b border-blue-100">
+        <div className="flex items-center gap-2">
+          <span className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-sm shrink-0 bg-blue-500">
+            <FileText className="w-3.5 h-3.5" />
+          </span>
+          <span className="text-sm font-semibold text-gray-800">Onboarding del cliente</span>
+          {hasData && (
+            <span className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-600">
+              <CheckCircle2 className="w-3 h-3" /> {filled} respuestas
+            </span>
+          )}
+        </div>
+        {hasData && (
+          <button onClick={() => setOpen(v => !v)}
+            className="flex items-center gap-1 text-xs text-gray-400 hover:text-blue-600 transition-colors">
+            {open ? "Ocultar" : "Ver respuestas"}
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
+          </button>
+        )}
+      </div>
+
+      <div className="p-4 space-y-3">
+        <div>
+          <p className="text-xs text-gray-500 mb-1.5">Link para el cliente</p>
+          <div className="flex items-center gap-2">
+            <div className="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-xs text-gray-500 truncate font-mono">
+              {link}
+            </div>
+            <button onClick={copy}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 ${copied ? "bg-emerald-100 text-emerald-600" : "bg-blue-600 hover:bg-blue-700 text-white"}`}>
+              {copied ? <><Check className="w-3.5 h-3.5" />Copiado</> : <><LinkIcon className="w-3.5 h-3.5" />Copiar link</>}
+            </button>
+            <a href={link} target="_blank" rel="noopener noreferrer"
+              className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-400 hover:text-gray-600 transition-colors">
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          </div>
+        </div>
+
+        {!hasData && (
+          <p className="text-xs text-gray-400 italic">El cliente aún no ha completado el onboarding.</p>
+        )}
+
+        {hasData && open && (
+          <div className="space-y-4 pt-1">
+            {ONBOARDING_STEPS.map((sec) => {
+              const entries = Object.entries(data!).filter(([k]) => k.startsWith(
+                sec.id === "empresa"       ? "nombre_empresa|nombre_legal|sector|anos_mercado|ubicacion|otras_ubicaciones|web|descripcion" :
+                sec.id === "contacto"      ? "c1_|c2_|aprobacion|plazo_aprobacion" :
+                sec.id === "marca"         ? "mision|diferencial|tono|marca_nunca|marcas_ref|colores_tipografia" :
+                sec.id === "audiencia"     ? "edad_rango|genero|nivel_socio|ubicacion_cliente|dolor_cliente|motivacion|objeciones|canales_cliente" :
+                sec.id === "competencia"   ? "comp" :
+                sec.id === "redes"         ? "plataformas|ig_usuario|fb_usuario|tiktok_usuario|li_usuario|estado_redes|contenido_actual|tiene_foto_video|accesos_listos" :
+                sec.id === "objetivos"     ? "objetivo|meta_concreta|kpi_cliente|plazo_resultados|presupuesto_pauta|monto_pauta" :
+                                             "temas_prohibidos|sensibilidades|regulaciones|conflictos_comp|promesas_negociacion|personalidad_cliente|notas_pm"
+              ).split("|").some(prefix => k.startsWith(prefix))).filter(([, v]) => v?.trim());
+              if (!entries.length) return null;
+              return (
+                <div key={sec.id}>
+                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">{sec.title}</h4>
+                  <div className="space-y-2">
+                    {entries.map(([k, v]) => (
+                      <div key={k} className="bg-white rounded-lg px-3 py-2 border border-gray-100">
+                        <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide mb-0.5">{k.replace(/_/g, " ")}</p>
+                        <p className="text-sm text-gray-700 whitespace-pre-wrap">{v.replace(/\|\|\|/g, ", ")}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function ClientProfileDashboard({ client: initialClient, projects, initialAssigned, whiteboards }: Props) {
   const supabase = createClient();
   const router   = useRouter();
@@ -523,6 +639,12 @@ export function ClientProfileDashboard({ client: initialClient, projects, initia
               clientId={client.id}
               briefToken={client.brief_token ?? ""}
               briefData={client.brief_data ?? null}
+            />
+
+            {/* Panel 3: Onboarding */}
+            <OnboardingPanel
+              onboardingToken={client.onboarding_token ?? ""}
+              onboardingData={(client as any).onboarding_data ?? null}
             />
           </div>
 

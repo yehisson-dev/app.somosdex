@@ -58,6 +58,7 @@ export async function GET(
         SELECT json_agg(json_build_object(
           'id',st.id,'title',st.title,'priority',st.priority,'status_id',st.status_id,
           'assignee_id',st.assignee_id,'due_date',to_char(st.due_date,'YYYY-MM-DD'),
+          'description',st.description,
           'created_at',st.created_at,'parent_task_id',st.parent_task_id,
           'status', CASE WHEN sps.id IS NOT NULL THEN json_build_object('id',sps.id,'name',sps.name,'color',sps.color) END,
           'assignee', CASE WHEN sau.id IS NOT NULL THEN json_build_object('id',sau.id,'full_name',sau.full_name,'avatar_url',sau.avatar_url) END

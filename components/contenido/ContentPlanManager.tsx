@@ -1,13 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import {
   Plus, X, Check, Link2, Eye, EyeOff, Pencil, Trash2,
-  ChevronDown, MessageSquare, Calendar, ExternalLink,
+  ChevronDown, MessageSquare, Calendar, ExternalLink, CheckSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
 import { getMediaPreview } from "@/lib/mediaUtils";
 import type { Client, ContentPlan, ContentPost, ContentPlatform, Project } from "@/types/database";
 
@@ -64,22 +63,40 @@ export function ContentPlanManager({ client, initialPlans }: Props) {
   const [postForm, setPostForm]         = useState(EMPTY_POST);
   const [savingPlan, setSavingPlan]     = useState(false);
   const [savingPost, setSavingPost]     = useState(false);
-  const supabase = createClient();
 
   const activePlan = plans.find((p) => p.id === activePlanId) ?? null;
   const posts = (activePlan?.posts ?? []).slice().sort((a, b) => a.position - b.position || (a.publish_date ?? "").localeCompare(b.publish_date ?? ""));
+
+  // ── Token de aprobación del cliente ──────────────────────────────────────
+  const [approvalToken, setApprovalToken] = useState<string | null>(null);
+  useEffect(() => {
+    fetch(`/api/clients/${client.id}/approval-token`)
+      .then(r => r.json())
+      .then(d => setApprovalToken(d.token ?? null))
+      .catch(() => {});
+  }, [client.id]);
+
+  function copyApprovalLink() {
+    if (!approvalToken) { toast.error("Token no disponible"); return; }
+    const url = `${window.location.origin}/aprobar/${approvalToken}`;
+    navigator.clipboard.writeText(url);
+    toast.success("Link de aprobación copiado 🎉");
+  }
 
   // ── Plan actions ─────────────────────────────────────────────────────────
   async function createPlan() {
     if (!newTitle.trim()) { toast.error("Escribe un título"); return; }
     setSavingPlan(true);
-    const { data, error } = await supabase.from("content_plans").insert({
-      client_id: client.id, platform: newPlatform, title: newTitle.trim(),
-    } as any).select("*, posts:content_posts(*, comments:content_post_comments(*))").single();
+    const res = await fetch("/api/content-plans", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ client_id: client.id, platform: newPlatform, title: newTitle.trim() }),
+    });
     setSavingPlan(false);
-    if (error || !data) { toast.error("Error al crear plan"); return; }
+    if (!res.ok) { toast.error("Error al crear plan"); return; }
+    const data = await res.json();
     setPlans((prev) => [...prev, data as ContentPlan]);
-    setActivePlanId((data as any).id);
+    setActivePlanId(data.id);
     setNewPlanOpen(false);
     setNewTitle("");
     toast.success("Plan creado");
@@ -87,7 +104,7 @@ export function ContentPlanManager({ client, initialPlans }: Props) {
 
   async function deletePlan(planId: string) {
     if (!confirm("¿Eliminar este plan? Se borrarán todas las publicaciones.")) return;
-    await supabase.from("content_plans").delete().eq("id", planId);
+    await fetch(`/api/content-plans/${planId}`, { method: "DELETE" });
     setPlans((prev) => prev.filter((p) => p.id !== planId));
     setActivePlanId(plans.find((p) => p.id !== planId)?.id ?? null);
     toast.success("Plan eliminado");
@@ -95,7 +112,11 @@ export function ContentPlanManager({ client, initialPlans }: Props) {
 
   async function togglePublish(plan: ContentPlan) {
     const val = !plan.is_published;
-    await supabase.from("content_plans").update({ is_published: val } as any).eq("id", plan.id);
+    await fetch(`/api/content-plans/${plan.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_published: val }),
+    });
     setPlans((prev) => prev.map((p) => p.id === plan.id ? { ...p, is_published: val } : p));
     toast.success(val ? "Plan publicado — el cliente ya puede verlo" : "Plan ocultado");
   }
@@ -127,7 +148,6 @@ export function ContentPlanManager({ client, initialPlans }: Props) {
     if (!activePlan) return;
     setSavingPost(true);
     const payload = {
-      plan_id: activePlan.id,
       media_urls: postForm.media_urls_text.split("\n").map((u) => u.trim()).filter(Boolean),
       publish_date: postForm.publish_date || null,
       post_type: postForm.post_type || null,
@@ -137,8 +157,12 @@ export function ContentPlanManager({ client, initialPlans }: Props) {
     };
 
     if (postDrawer.post) {
-      const { error } = await supabase.from("content_posts").update(payload as any).eq("id", postDrawer.post.id);
-      if (error) { toast.error("Error al guardar"); setSavingPost(false); return; }
+      const res = await fetch(`/api/content-plans/${activePlan.id}/posts`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ postId: postDrawer.post.id, ...payload }),
+      });
+      if (!res.ok) { toast.error("Error al guardar"); setSavingPost(false); return; }
       setPlans((prev) => prev.map((p) =>
         p.id !== activePlan.id ? p : {
           ...p,
@@ -148,11 +172,13 @@ export function ContentPlanManager({ client, initialPlans }: Props) {
         }
       ));
     } else {
-      const { data, error } = await supabase.from("content_posts")
-        .insert(payload as any)
-        .select("*, comments:content_post_comments(*)")
-        .single();
-      if (error || !data) { toast.error("Error al crear publicación"); setSavingPost(false); return; }
+      const res = await fetch(`/api/content-plans/${activePlan.id}/posts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) { toast.error("Error al crear publicación"); setSavingPost(false); return; }
+      const data = await res.json();
       setPlans((prev) => prev.map((p) =>
         p.id !== activePlan.id ? p : { ...p, posts: [...(p.posts ?? []), data as ContentPost] }
       ));
@@ -165,7 +191,11 @@ export function ContentPlanManager({ client, initialPlans }: Props) {
   async function deletePost(postId: string) {
     if (!activePlan) return;
     if (!confirm("¿Eliminar esta publicación?")) return;
-    await supabase.from("content_posts").delete().eq("id", postId);
+    await fetch(`/api/content-plans/${activePlan.id}/posts`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ postId }),
+    });
     setPlans((prev) => prev.map((p) =>
       p.id !== activePlan.id ? p : { ...p, posts: (p.posts ?? []).filter((pp) => pp.id !== postId) }
     ));
@@ -178,7 +208,17 @@ export function ContentPlanManager({ client, initialPlans }: Props) {
     <div className="flex-1 flex overflow-hidden">
       {/* ── Sidebar de plataformas ────────────────────────────────────── */}
       <div className="w-56 border-r border-gray-200 bg-white flex flex-col shrink-0 overflow-y-auto">
-        <div className="p-3 space-y-0.5">
+
+        {/* Botón de aprobación del cliente — siempre visible */}
+        <div className="px-3 pt-3 pb-2">
+          <button onClick={copyApprovalLink}
+            className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold transition-colors shadow-sm">
+            <CheckSquare className="w-3.5 h-3.5 shrink-0" />
+            Compartir con cliente
+          </button>
+        </div>
+
+        <div className="px-3 pb-1 space-y-0.5">
           {plans.map((plan) => {
             const cfg = PLATFORMS[plan.platform] ?? PLATFORMS.instagram;
             const postCount = plan.posts?.length ?? 0;
@@ -272,6 +312,12 @@ export function ContentPlanManager({ client, initialPlans }: Props) {
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-500 hover:text-gray-800 hover:border-gray-300 transition-colors bg-white">
               <Link2 className="w-3.5 h-3.5" />
               Copiar link
+            </button>
+
+            <button onClick={copyApprovalLink}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-200 text-xs text-emerald-700 hover:bg-emerald-50 transition-colors bg-white font-medium">
+              <CheckSquare className="w-3.5 h-3.5" />
+              Link aprobación cliente
             </button>
 
             <button

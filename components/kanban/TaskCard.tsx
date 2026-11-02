@@ -62,7 +62,14 @@ export function TaskCard({ task, isDragging, onSelect }: TaskCardProps) {
       {/* Thumbnail */}
       {thumbnail && (
         <div className="relative w-full h-36 bg-gray-100 overflow-hidden">
-          <img src={thumbnail} alt={task.title} className="w-full h-full object-cover" />
+          <img
+            src={thumbnail}
+            alt={task.title}
+            loading="lazy"
+            decoding="async"
+            className="w-full h-full object-cover"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+          />
           {isVideo && (
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="w-8 h-8 rounded-full bg-black/50 flex items-center justify-center">

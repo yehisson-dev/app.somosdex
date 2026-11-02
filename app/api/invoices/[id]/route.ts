@@ -45,14 +45,17 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const { id } = await params;
   const body = await req.json();
 
-  // Actualización de solo estado (llamada rápida desde la tabla)
-  if (body.status && Object.keys(body).length === 1) {
-    await sql`UPDATE invoices SET status = ${body.status}, updated_at = now() WHERE id = ${id}`;
+  // Actualización parcial rápida (status, company, bank_account_id)
+  const QUICK = ["status", "company", "bank_account_id"];
+  if (Object.keys(body).every(k => QUICK.includes(k))) {
+    if ("status"          in body) await sql`UPDATE invoices SET status          = ${body.status}                   WHERE id = ${id}`;
+    if ("company"         in body) await sql`UPDATE invoices SET company         = ${body.company}                  WHERE id = ${id}`;
+    if ("bank_account_id" in body) await sql`UPDATE invoices SET bank_account_id = ${body.bank_account_id ?? null}  WHERE id = ${id}`;
     return NextResponse.json({ ok: true });
   }
 
   // Actualización completa desde el formulario de edición
-  const { client_id, issue_date, due_date, notes, tax_rate, currency, items, status } = body;
+  const { client_id, issue_date, due_date, notes, tax_rate, currency, items, status, company, bank_account_id } = body;
 
   const subtotal = (items ?? []).reduce((s: number, it: any) =>
     s + Number(it.quantity ?? 1) * Number(it.unit_price ?? 0), 0);
@@ -63,16 +66,18 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   await sql`
     UPDATE invoices SET
       client_id   = ${client_id ?? null},
-      issue_date  = ${issue_date},
-      due_date    = ${due_date ?? null},
+      issue_date  = ${issue_date || null},
+      due_date    = ${due_date || null},
       notes       = ${notes ?? null},
       tax_rate    = ${tax},
       tax_amount  = ${tax_amount},
       subtotal    = ${subtotal},
       total       = ${total},
-      currency    = ${currency ?? "USD"},
-      status      = ${status ?? "draft"},
-      updated_at  = now()
+      currency        = ${currency ?? "USD"},
+      status          = ${status ?? "draft"},
+      company         = ${company ?? "DEX"},
+      bank_account_id = ${bank_account_id ?? null},
+      updated_at      = now()
     WHERE id = ${id}
   `;
 

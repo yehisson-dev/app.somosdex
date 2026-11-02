@@ -11,7 +11,7 @@ export async function generateMetadata({ params }: Props) {
     SELECT cp.title, c.name AS client_name
     FROM content_plans cp
     LEFT JOIN clients c ON c.id = cp.client_id
-    WHERE cp.share_token = ${token}::uuid
+    WHERE cp.share_token = ${token}
     LIMIT 1
   `.catch(() => []);
   if (!rows[0]) return { title: "Plan de contenido" };
@@ -48,7 +48,7 @@ export default async function PublicPlanPage({ params }: Props) {
       ), '[]') AS posts
     FROM content_plans cp
     LEFT JOIN clients c ON c.id = cp.client_id
-    WHERE cp.share_token = ${token}::uuid
+    WHERE cp.share_token = ${token}
     LIMIT 1
   `;
 

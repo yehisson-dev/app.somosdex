@@ -20,6 +20,8 @@ import {
   Bot,
   TrendingUp,
   DollarSign,
+  BarChart2,
+  Search,
 } from "lucide-react";
 import { cn, getInitials } from "@/lib/utils";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -105,6 +107,7 @@ export function Sidebar() {
           <NavItem href="/pendientes"  icon={<Clock         className="w-4 h-4" />} label="Pendientes hoy" active={pathname === "/pendientes"} />
           <NavItemWithBadge href="/mensajes" icon={<MessageSquare className="w-4 h-4" />} label="Mensajes" active={pathname.startsWith("/mensajes")} />
           <NavItem href="/pizarras" icon={<LayoutDashboard className="w-4 h-4" />} label="Pizarras" active={pathname.startsWith("/pizarras")} />
+          <NavItem href="/contenido" icon={<Search className="w-4 h-4" />} label="Contenidos" active={pathname.startsWith("/contenido")} />
 
           <div className="pt-3 pb-1 px-2">
             <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Proyectos</span>
@@ -153,10 +156,10 @@ export function Sidebar() {
                 active={pathname.startsWith("/finanzas")}
               />
               <NavItem
-                href="/usuarios"
+                href="/rrhh"
                 icon={<Users className="w-4 h-4" />}
-                label="Usuarios"
-                active={pathname.startsWith("/usuarios")}
+                label="RRHH"
+                active={pathname.startsWith("/rrhh") || pathname.startsWith("/usuarios")}
               />
               <NavItem
                 href="/cerebro"
