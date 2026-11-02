@@ -9,7 +9,7 @@ function forbidden() {
 
 export async function GET(req: NextRequest) {
   const session = await auth();
-  if (session?.user?.email !== OWNER_EMAIL) return forbidden();
+  if ((session?.user as any)?.role !== "admin") return forbidden();
 
   const { searchParams } = new URL(req.url);
   const dateStr = searchParams.get("date") ?? new Date().toISOString().slice(0, 10);

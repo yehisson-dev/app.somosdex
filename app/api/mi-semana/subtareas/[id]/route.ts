@@ -7,7 +7,7 @@ const forbidden = () => NextResponse.json({ error: "Forbidden" }, { status: 403 
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
-  if (session?.user?.email !== OWNER_EMAIL) return forbidden();
+  if ((session?.user as any)?.role !== "admin") return forbidden();
   const { id } = await params;
   const { titulo, frecuencia, orden } = await req.json();
   const [row] = await sql`
@@ -22,7 +22,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
 export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
-  if (session?.user?.email !== OWNER_EMAIL) return forbidden();
+  if ((session?.user as any)?.role !== "admin") return forbidden();
   const { id } = await params;
   await sql`DELETE FROM ms_subtareas WHERE id = ${id}`;
   return NextResponse.json({ ok: true });

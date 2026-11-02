@@ -7,7 +7,7 @@ const forbidden = () => NextResponse.json({ error: "Forbidden" }, { status: 403 
 
 export async function POST(req: NextRequest) {
   const session = await auth();
-  if (session?.user?.email !== OWNER_EMAIL) return forbidden();
+  if ((session?.user as any)?.role !== "admin") return forbidden();
   const uid = session.user.id as string;
   const { actividad_id, titulo, frecuencia, orden } = await req.json();
   const [row] = await sql`

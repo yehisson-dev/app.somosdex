@@ -106,7 +106,7 @@ export function Sidebar() {
         <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
           <NavItem href="/mis-tareas"  icon={<CheckSquare   className="w-4 h-4" />} label="Mis tareas"     active={pathname === "/mis-tareas"} />
           <NavItem href="/pendientes"  icon={<Clock         className="w-4 h-4" />} label="Pendientes hoy" active={pathname === "/pendientes"} />
-          {session?.user?.email === "yehisson@somosdex.com" && (
+          {role === "admin" && (
             <NavItem href="/mi-semana" icon={<CalendarDays className="w-4 h-4" />} label="Mi semana" active={pathname.startsWith("/mi-semana")} />
           )}
           <NavItemWithBadge href="/mensajes" icon={<MessageSquare className="w-4 h-4" />} label="Mensajes" active={pathname.startsWith("/mensajes")} />

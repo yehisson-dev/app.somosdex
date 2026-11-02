@@ -7,7 +7,7 @@ const forbidden = () => NextResponse.json({ error: "Forbidden" }, { status: 403 
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
-  if (session?.user?.email !== OWNER_EMAIL) return forbidden();
+  if ((session?.user as any)?.role !== "admin") return forbidden();
   const uid = session.user.id as string;
   const { id } = await params;
   const { date } = await req.json(); // ISO date string YYYY-MM-DD

@@ -3,14 +3,14 @@ import { auth } from "@/lib/auth";
 import sql from "@/lib/db";
 import { TopBar } from "@/components/layout/TopBar";
 import { MiSemanaClient } from "@/components/mi-semana/MiSemanaClient";
-import { OWNER_EMAIL, getWeekVariant, getMonday, getPeriodoInicio } from "@/lib/mi-semana-utils";
+import { getWeekVariant, getPeriodoInicio, OWNER_EMAIL } from "@/lib/mi-semana-utils";
 
 export const dynamic = "force-dynamic";
 
 export default async function MiSemanaPage() {
   const session = await auth();
   if (!session) redirect("/login");
-  if (session.user?.email !== OWNER_EMAIL) notFound();
+  if ((session?.user as any)?.role !== "admin") notFound();
 
   const now = new Date();
   const variant = getWeekVariant(now);
